@@ -1,0 +1,5 @@
+{
+  "name": "BPR Digital Signage",
+  "description": "A modern, real-time digital signage application for Bank Perkreditan Rakyat (BPR) to display promotional content, interest rates, currency exchange rates, gold prices, stock market data, and economic news.",
+  "requestFramePermissions": []
+}
