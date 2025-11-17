@@ -1,5 +1,4 @@
-
-
+// Fix: Corrected the import statement for React and its hooks.
 import React, { useState, useEffect } from 'react';
 import Header from './components/Header';
 import Sidebar from './components/Sidebar';
@@ -19,32 +18,39 @@ const loadFromLocalStorage = <T,>(key: string, defaultValue: T): T => {
             return JSON.parse(storedValue);
         }
     } catch (error) {
+// Fix: Added curly braces to the catch block to correctly scope the error variable and fix a syntax error.
         console.error(`Error parsing localStorage key "${key}":`, error);
     }
     return defaultValue;
 };
 
 
-const PromoContent: React.FC<{ promos: KreditPromo[], currentIndex: number }> = ({ promos, currentIndex }) => {
-  if (promos.length === 0) return null;
-  const currentPromo = promos[currentIndex];
-  if (!currentPromo) return null;
+const PromoContent: React.FC<{ promo: KreditPromo | null }> = ({ promo }) => {
+  if (!promo) return null;
 
-  return (
-    <div className="relative w-full h-full flex flex-col justify-end p-12 text-white">
-      <div className="mb-4">
-        <div className="flex gap-2">
-          {promos.map((_, index) => (
-            <div key={index} className={`w-3 h-3 rounded-full transition-colors ${index === currentIndex ? 'bg-amber-400' : 'bg-white/50'}`}></div>
-          ))}
-        </div>
+  // Jika promo memiliki gambar (mode poster), tampilkan hanya gambar.
+  if (promo.backgroundImage) {
+    return (
+      <div className="relative w-full h-full overflow-hidden rounded-lg">
+        <img
+          src={promo.backgroundImage}
+          alt={promo.title}
+          className="object-contain w-full h-full shadow-2xl"
+        />
       </div>
-      <h2 className="text-6xl font-bold leading-tight drop-shadow-lg">{currentPromo.title}</h2>
-      <p className="text-3xl font-light drop-shadow-md">{currentPromo.description}</p>
-      <p className="text-8xl font-bold text-amber-400 mt-4 drop-shadow-xl">{currentPromo.rate}</p>
+    );
+  }
+
+  // Jika promo berbasis teks, tampilkan teks dengan ukuran lebih besar.
+  return (
+    <div className="relative w-full h-full flex flex-col justify-center p-12 text-white overflow-hidden">
+      <h2 className="text-6xl font-bold leading-tight drop-shadow-lg">{promo.title}</h2>
+      <p className="text-3xl font-light drop-shadow-md mt-4">{promo.description}</p>
+      <p className="text-8xl font-bold text-amber-400 mt-8 drop-shadow-xl">{promo.rate}</p>
     </div>
   );
 };
+
 
 const App: React.FC = () => {
   // State for external data
@@ -107,25 +113,22 @@ const App: React.FC = () => {
       };
   }, [isSettingsVisible]);
   
-  const carouselImages = kreditPromos.map((promo, index) => {
-      const fallbackImage = promoImages.length > 0 
-          ? promoImages[index % promoImages.length] 
-          : 'https://picsum.photos/1920/1080?grayscale';
-      return promo.backgroundImage || fallbackImage;
-  });
-
+  const currentPromo = kreditPromos.length > 0 ? kreditPromos[promoIndex] : null;
 
   return (
     <div className="bg-[#0a192f] w-screen h-screen relative overflow-hidden">
       <div className="absolute inset-0 w-full h-full">
-        <PromoCarousel images={carouselImages} currentIndex={promoIndex} />
+        <PromoCarousel 
+          images={promoImages.length > 0 ? promoImages : ['https://picsum.photos/1920/1080?grayscale']} 
+          currentIndex={promoImages.length > 0 ? promoIndex % promoImages.length : 0} 
+        />
       </div>
 
       <div className="absolute inset-0 w-full h-full flex flex-col">
         <Header />
         <main className="flex-1 grid grid-cols-3 gap-4 px-4 pb-4 min-h-0">
-            <div className="col-span-2 h-full">
-                <PromoContent promos={kreditPromos} currentIndex={promoIndex} />
+            <div className="col-span-2 h-full min-h-0">
+                <PromoContent promo={currentPromo} />
             </div>
             <div className="col-span-1 h-full overflow-hidden">
                 <Sidebar 

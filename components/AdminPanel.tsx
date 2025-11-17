@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import type { KreditPromo, InterestRate, DepositoRate } from '../types';
 
@@ -27,6 +26,20 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
         const updatedPromos = [...localPromos];
         updatedPromos[index] = { ...updatedPromos[index], [field]: value };
         setLocalPromos(updatedPromos);
+    };
+
+    const handlePromoImageUpload = (e: React.ChangeEvent<HTMLInputElement>, index: number) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = (loadEvent) => {
+                const base64String = loadEvent.target?.result as string;
+                if (base64String) {
+                    handlePromoChange(index, 'backgroundImage', base64String);
+                }
+            };
+            reader.readAsDataURL(file);
+        }
     };
 
     const addPromo = () => {
@@ -62,7 +75,6 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
     };
 
     const removeDeposito = (index: number) => {
-        // FIX: Corrected typo from localDepositos to localDepositoRates
         setLocalDepositoRates(localDepositoRates.filter((_, i) => i !== index));
     };
 
@@ -105,23 +117,53 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                 <main className="flex-1 p-6 overflow-y-auto space-y-8 text-white">
                     {/* Promo Kredit Section */}
                     <section>
-                        <h3 className="text-xl font-semibold mb-4 text-amber-400">Promo Kredit & Carousel</h3>
+                        <h3 className="text-xl font-semibold mb-4 text-amber-400">Manajemen Promo</h3>
                         <div className="space-y-4">
                             {localPromos.map((promo, index) => (
-                                <div key={index} className="bg-slate-800/50 p-3 rounded-lg space-y-2">
+                                <div key={index} className="bg-slate-800/50 p-3 rounded-lg">
                                     <div className="grid grid-cols-12 gap-3 items-center">
                                         <input type="text" value={promo.title} onChange={(e) => handlePromoChange(index, 'title', e.target.value)} placeholder="Judul" className="col-span-4 bg-slate-700 p-2 rounded" />
                                         <input type="text" value={promo.description} onChange={(e) => handlePromoChange(index, 'description', e.target.value)} placeholder="Deskripsi" className="col-span-5 bg-slate-700 p-2 rounded" />
                                         <input type="text" value={promo.rate} onChange={(e) => handlePromoChange(index, 'rate', e.target.value)} placeholder="Suku Bunga" className="col-span-2 bg-slate-700 p-2 rounded" />
                                         <button onClick={() => removePromo(index)} className="bg-red-600 hover:bg-red-700 p-2 rounded">Hapus</button>
                                     </div>
-                                    <input 
-                                      type="text" 
-                                      value={promo.backgroundImage || ''} 
-                                      onChange={(e) => handlePromoChange(index, 'backgroundImage', e.target.value)} 
-                                      placeholder="URL Gambar Latar (opsional)" 
-                                      className="w-full bg-slate-700 p-2 rounded mt-2" 
-                                    />
+                                    <div className="mt-2 flex items-center gap-4">
+                                        {promo.backgroundImage ? (
+                                            <>
+                                                <img src={promo.backgroundImage} alt="Preview" className="w-24 h-14 object-cover rounded" />
+                                                <div className="flex flex-col gap-1.5">
+                                                    <label className="bg-yellow-600 hover:bg-yellow-700 text-white px-3 py-1 rounded text-sm cursor-pointer text-center">
+                                                        Ganti Gambar
+                                                        <input 
+                                                            type="file" 
+                                                            className="hidden" 
+                                                            accept="image/*"
+                                                            onChange={(e) => handlePromoImageUpload(e, index)}
+                                                        />
+                                                    </label>
+                                                    <button 
+                                                        onClick={() => handlePromoChange(index, 'backgroundImage', '')} 
+                                                        className="bg-gray-600 hover:bg-gray-700 px-3 py-1 rounded text-sm"
+                                                    >
+                                                        Hapus
+                                                    </button>
+                                                </div>
+                                            </>
+                                        ) : (
+                                            <label className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded cursor-pointer">
+                                                Upload Gambar Promo
+                                                <input 
+                                                    type="file" 
+                                                    className="hidden" 
+                                                    accept="image/*"
+                                                    onChange={(e) => handlePromoImageUpload(e, index)}
+                                                />
+                                            </label>
+                                        )}
+                                    </div>
+                                     <p className="text-xs text-slate-400 pt-2">
+                                        Tips: Jika gambar diupload, teks di atas (judul, deskripsi, dll) akan diabaikan dan hanya gambar poster yang akan ditampilkan.
+                                    </p>
                                 </div>
                             ))}
                         </div>
@@ -130,8 +172,8 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                     
                      {/* Background Images Section */}
                     <section>
-                        <h3 className="text-xl font-semibold mb-4 text-amber-400">Gambar Latar Belakang Umum (Fallback)</h3>
-                        <p className="text-sm text-slate-400 mb-2">Gambar ini akan digunakan jika promo tidak memiliki gambar latar spesifik.</p>
+                        <h3 className="text-xl font-semibold mb-4 text-amber-400">Gambar Latar Belakang Carousel</h3>
+                        <p className="text-sm text-slate-400 mb-2">Gambar ini akan digunakan sebagai latar belakang slideshow utama di belakang konten promo. Masukkan URL gambar.</p>
                         <div className="space-y-2">
                             {localImages.map((url, index) => (
                                 <div key={index} className="flex items-center gap-2 bg-slate-800/50 p-2 rounded-lg">
