@@ -47,6 +47,7 @@ export interface KreditPromo {
   title: string;
   rate: string;
   description: string;
+  backgroundImage?: string;
 }
 
 export interface DepositoRate {

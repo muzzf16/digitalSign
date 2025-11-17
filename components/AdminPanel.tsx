@@ -30,7 +30,7 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
     };
 
     const addPromo = () => {
-        setLocalPromos([...localPromos, { title: 'Promo Baru', rate: '0%', description: 'Deskripsi singkat' }]);
+        setLocalPromos([...localPromos, { title: 'Promo Baru', rate: '0%', description: 'Deskripsi singkat', backgroundImage: '' }]);
     };
 
     const removePromo = (index: number) => {
@@ -62,6 +62,7 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
     };
 
     const removeDeposito = (index: number) => {
+        // FIX: Corrected typo from localDepositos to localDepositoRates
         setLocalDepositoRates(localDepositoRates.filter((_, i) => i !== index));
     };
 
@@ -83,12 +84,12 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
         props.setKreditPromos(localPromos);
         props.setSavingsRates(localSavingsRates);
         props.setDepositoRates(localDepositoRates);
-        props.setPromoImages(localImages);
+        props.setPromoImages(localImages.filter(img => img.trim() !== ''));
         
         localStorage.setItem('bpr_kreditPromos', JSON.stringify(localPromos));
         localStorage.setItem('bpr_savingsRates', JSON.stringify(localSavingsRates));
         localStorage.setItem('bpr_depositoRates', JSON.stringify(localDepositoRates));
-        localStorage.setItem('bpr_promoImages', JSON.stringify(localImages));
+        localStorage.setItem('bpr_promoImages', JSON.stringify(localImages.filter(img => img.trim() !== '')));
 
         onClose();
     };
@@ -107,11 +108,20 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                         <h3 className="text-xl font-semibold mb-4 text-amber-400">Promo Kredit & Carousel</h3>
                         <div className="space-y-4">
                             {localPromos.map((promo, index) => (
-                                <div key={index} className="grid grid-cols-8 gap-3 items-center bg-slate-800/50 p-3 rounded-lg">
-                                    <input type="text" value={promo.title} onChange={(e) => handlePromoChange(index, 'title', e.target.value)} placeholder="Judul" className="col-span-3 bg-slate-700 p-2 rounded" />
-                                    <input type="text" value={promo.description} onChange={(e) => handlePromoChange(index, 'description', e.target.value)} placeholder="Deskripsi" className="col-span-3 bg-slate-700 p-2 rounded" />
-                                    <input type="text" value={promo.rate} onChange={(e) => handlePromoChange(index, 'rate', e.target.value)} placeholder="Suku Bunga" className="col-span-1 bg-slate-700 p-2 rounded" />
-                                    <button onClick={() => removePromo(index)} className="bg-red-600 hover:bg-red-700 p-2 rounded">Hapus</button>
+                                <div key={index} className="bg-slate-800/50 p-3 rounded-lg space-y-2">
+                                    <div className="grid grid-cols-12 gap-3 items-center">
+                                        <input type="text" value={promo.title} onChange={(e) => handlePromoChange(index, 'title', e.target.value)} placeholder="Judul" className="col-span-4 bg-slate-700 p-2 rounded" />
+                                        <input type="text" value={promo.description} onChange={(e) => handlePromoChange(index, 'description', e.target.value)} placeholder="Deskripsi" className="col-span-5 bg-slate-700 p-2 rounded" />
+                                        <input type="text" value={promo.rate} onChange={(e) => handlePromoChange(index, 'rate', e.target.value)} placeholder="Suku Bunga" className="col-span-2 bg-slate-700 p-2 rounded" />
+                                        <button onClick={() => removePromo(index)} className="bg-red-600 hover:bg-red-700 p-2 rounded">Hapus</button>
+                                    </div>
+                                    <input 
+                                      type="text" 
+                                      value={promo.backgroundImage || ''} 
+                                      onChange={(e) => handlePromoChange(index, 'backgroundImage', e.target.value)} 
+                                      placeholder="URL Gambar Latar (opsional)" 
+                                      className="w-full bg-slate-700 p-2 rounded mt-2" 
+                                    />
                                 </div>
                             ))}
                         </div>
@@ -120,7 +130,8 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                     
                      {/* Background Images Section */}
                     <section>
-                        <h3 className="text-xl font-semibold mb-4 text-amber-400">Gambar Latar Belakang Carousel</h3>
+                        <h3 className="text-xl font-semibold mb-4 text-amber-400">Gambar Latar Belakang Umum (Fallback)</h3>
+                        <p className="text-sm text-slate-400 mb-2">Gambar ini akan digunakan jika promo tidak memiliki gambar latar spesifik.</p>
                         <div className="space-y-2">
                             {localImages.map((url, index) => (
                                 <div key={index} className="flex items-center gap-2 bg-slate-800/50 p-2 rounded-lg">

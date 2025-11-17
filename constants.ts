@@ -10,9 +10,9 @@ export const PROMO_IMAGES: string[] = [
 export const SAVINGS_RATES: InterestRate[] = [{ product: 'Tabungan', rate: '0%' }];
 
 export const KREDIT_PROMOS: KreditPromo[] = [
-    { title: 'Kredit Usaha Mikro', rate: '8.5% p.a.', description: 'Suku bunga mulai' },
-    { title: 'Kredit Kendaraan', rate: '7.2% p.a.', description: 'DP ringan mulai 10%' },
-    { title: 'Kredit Rumah', rate: '6.9% p.a.', description: 'Fixed 3 tahun' },
+    { title: 'Kredit Usaha Mikro', rate: '8.5% p.a.', description: 'Suku bunga mulai', backgroundImage: 'https://picsum.photos/1920/1080?random=1' },
+    { title: 'Kredit Kendaraan', rate: '7.2% p.a.', description: 'DP ringan mulai 10%', backgroundImage: 'https://picsum.photos/1920/1080?random=2' },
+    { title: 'Kredit Rumah', rate: '6.9% p.a.', description: 'Fixed 3 tahun', backgroundImage: 'https://picsum.photos/1920/1080?random=3' },
 ];
 
 export const MOCK_DEPOSITO_RATES: DepositoRate[] = [

@@ -135,30 +135,29 @@ interface SidebarProps {
 
 const Sidebar: React.FC<SidebarProps> = (props) => {
   const { currencyRates, goldPrice, stockData, kreditPromos, savingsRates, depositoRates } = props;
-  const viewportRef = useRef<HTMLElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
-  const [isOverflowing, setIsOverflowing] = useState(false);
+  const [animationDuration, setAnimationDuration] = useState('50s');
 
   useEffect(() => {
-    const checkOverflow = () => {
-      const viewport = viewportRef.current;
-      const content = contentRef.current;
-      if (viewport && content) {
-        const isContentTaller = content.scrollHeight > viewport.clientHeight;
-        if (isContentTaller !== isOverflowing) {
-          setIsOverflowing(isContentTaller);
+    const calculateDuration = () => {
+      if (contentRef.current) {
+        const height = contentRef.current.scrollHeight;
+        if (height > 0) {
+          // Speed factor (pixels per second), e.g., 40px/s
+          setAnimationDuration(`${height / 40}s`);
         }
       }
     };
     
-    const timeoutId = setTimeout(checkOverflow, 100);
-    window.addEventListener('resize', checkOverflow);
+    // Recalculate after a short delay to allow DOM to update
+    const timeoutId = setTimeout(calculateDuration, 100);
+    window.addEventListener('resize', calculateDuration);
     
     return () => {
       clearTimeout(timeoutId);
-      window.removeEventListener('resize', checkOverflow);
+      window.removeEventListener('resize', calculateDuration);
     };
-  }, [isOverflowing, currencyRates, goldPrice, stockData, kreditPromos, savingsRates, depositoRates]);
+  }, [currencyRates, goldPrice, stockData, kreditPromos, savingsRates, depositoRates]);
 
 
   const sidebarContent = (
@@ -172,22 +171,19 @@ const Sidebar: React.FC<SidebarProps> = (props) => {
     </>
   );
 
-  const animationDuration = contentRef.current ? `${contentRef.current.scrollHeight / 40}s` : '50s';
-
   return (
-    <aside ref={viewportRef} className="w-full h-full text-white overflow-hidden">
+    <aside className="w-full h-full text-white overflow-hidden">
       <div 
-        className={isOverflowing ? "sidebar-scroll-wrapper" : ""}
-        style={isOverflowing ? { animationDuration } : {}}
+        className="sidebar-scroll-wrapper"
+        style={{ animationDuration }}
       >
         <div ref={contentRef} className="flex flex-col gap-4">
           {sidebarContent}
         </div>
-        {isOverflowing && (
-          <div className="flex flex-col gap-4 pt-4">
-            {sidebarContent}
-          </div>
-        )}
+        {/* Always duplicate content for a seamless animation loop */}
+        <div className="flex flex-col gap-4 pt-4">
+          {sidebarContent}
+        </div>
       </div>
     </aside>
   );

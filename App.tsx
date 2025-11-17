@@ -26,7 +26,8 @@ const loadFromLocalStorage = <T,>(key: string, defaultValue: T): T => {
 
 
 const PromoContent: React.FC<{ promos: KreditPromo[], currentIndex: number }> = ({ promos, currentIndex }) => {
-  const currentPromo = promos[currentIndex % promos.length];
+  if (promos.length === 0) return null;
+  const currentPromo = promos[currentIndex];
   if (!currentPromo) return null;
 
   return (
@@ -34,7 +35,7 @@ const PromoContent: React.FC<{ promos: KreditPromo[], currentIndex: number }> = 
       <div className="mb-4">
         <div className="flex gap-2">
           {promos.map((_, index) => (
-            <div key={index} className={`w-3 h-3 rounded-full transition-colors ${index === (currentIndex % promos.length) ? 'bg-amber-400' : 'bg-white/50'}`}></div>
+            <div key={index} className={`w-3 h-3 rounded-full transition-colors ${index === currentIndex ? 'bg-amber-400' : 'bg-white/50'}`}></div>
           ))}
         </div>
       </div>
@@ -65,16 +66,14 @@ const App: React.FC = () => {
   const [isSettingsVisible, setIsSettingsVisible] = useState(false);
 
   useEffect(() => {
-    const promoCount = kreditPromos.length || 1;
-    const imageCount = promoImages.length || 1;
-    const totalCycles = promoCount * imageCount;
-    if (totalCycles === 0) return;
+    const promoCount = kreditPromos.length;
+    if (promoCount === 0) return;
 
     const timer = setInterval(() => {
-        setPromoIndex((prevIndex) => (prevIndex + 1) % totalCycles);
+        setPromoIndex((prevIndex) => (prevIndex + 1) % promoCount);
     }, 7000);
     return () => clearInterval(timer);
-  }, [kreditPromos.length, promoImages.length]);
+  }, [kreditPromos.length]);
 
   useEffect(() => {
     const getData = async () => {
@@ -107,11 +106,19 @@ const App: React.FC = () => {
           window.removeEventListener('mousemove', handleMouseMove);
       };
   }, [isSettingsVisible]);
+  
+  const carouselImages = kreditPromos.map((promo, index) => {
+      const fallbackImage = promoImages.length > 0 
+          ? promoImages[index % promoImages.length] 
+          : 'https://picsum.photos/1920/1080?grayscale';
+      return promo.backgroundImage || fallbackImage;
+  });
+
 
   return (
     <div className="bg-[#0a192f] w-screen h-screen relative overflow-hidden">
       <div className="absolute inset-0 w-full h-full">
-        <PromoCarousel images={promoImages} currentIndex={promoIndex % (promoImages.length || 1)} />
+        <PromoCarousel images={carouselImages} currentIndex={promoIndex} />
       </div>
 
       <div className="absolute inset-0 w-full h-full flex flex-col">
