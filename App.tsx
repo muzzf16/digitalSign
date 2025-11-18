@@ -98,6 +98,41 @@ const App: React.FC = () => {
     return () => clearInterval(intervalId);
   }, []);
 
+  // Auto-refresh interval for background images (e.g., every 30 minutes) - set to 0 to disable
+  const BG_REFRESH_INTERVAL = 3 * 60 * 1000; // 30 minutes in milliseconds (set to 0 to disable)
+
+  useEffect(() => {
+      if (BG_REFRESH_INTERVAL > 0) {
+          const bgRefreshTimer = setInterval(() => {
+              // Force refresh of background images by adding timestamp to URLs
+              setPromoImages(prevImages =>
+                prevImages.map(img =>
+                  img.includes('?') ? `${img}&t=${Date.now()}` : `${img}?t=${Date.now()}`
+                )
+              );
+          }, BG_REFRESH_INTERVAL);
+
+          return () => {
+              clearInterval(bgRefreshTimer);
+          };
+      }
+  }, []);
+
+  // Full page refresh interval (e.g., every 6 hours) - set to 0 to disable
+  const PAGE_REFRESH_INTERVAL = 1 * 60 * 60 * 1000; // 6 hours in milliseconds (set to 0 to disable)
+
+  useEffect(() => {
+      if (PAGE_REFRESH_INTERVAL > 0) {
+          const pageRefreshTimer = setInterval(() => {
+              window.location.reload();
+          }, PAGE_REFRESH_INTERVAL);
+
+          return () => {
+              clearInterval(pageRefreshTimer);
+          };
+      }
+  }, []);
+
   useEffect(() => {
       const handleMouseMove = (event: MouseEvent) => {
           const hotZoneWidth = 100; // apx 100px from right edge
@@ -116,7 +151,7 @@ const App: React.FC = () => {
   const currentPromo = kreditPromos.length > 0 ? kreditPromos[promoIndex] : null;
 
   return (
-    <div className="bg-[#0a192f] w-screen h-screen relative overflow-hidden">
+    <div className="w-screen h-screen relative overflow-hidden">
       <div className="absolute inset-0 w-full h-full">
         <PromoCarousel 
           images={promoImages.length > 0 ? promoImages : ['https://picsum.photos/1920/1080?grayscale']} 

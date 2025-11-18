@@ -33,9 +33,35 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
         if (file) {
             const reader = new FileReader();
             reader.onload = (loadEvent) => {
-                const base64String = loadEvent.target?.result as string;
+                let base64String = loadEvent.target?.result as string;
                 if (base64String) {
-                    handlePromoChange(index, 'backgroundImage', base64String);
+                    // Check for and compress large base64 images
+                    if (base64String.length > 1024 * 1024) { // If image is > 1MB
+                        // Create an image to compress
+                        const img = new Image();
+                        img.onload = () => {
+                            // Create a canvas to compress the image
+                            const canvas = document.createElement('canvas');
+                            const ctx = canvas.getContext('2d');
+
+                            // Calculate new dimensions (reduce by 50%)
+                            const maxWidth = img.width * 0.5;
+                            const maxHeight = img.height * 0.5;
+
+                            canvas.width = maxWidth;
+                            canvas.height = maxHeight;
+
+                            ctx?.drawImage(img, 0, 0, maxWidth, maxHeight);
+
+                            // Convert back to base64 with quality reduction
+                            const compressedBase64 = canvas.toDataURL('image/jpeg', 0.7); // 70% quality
+
+                            handlePromoChange(index, 'backgroundImage', compressedBase64);
+                        };
+                        img.src = base64String;
+                    } else {
+                        handlePromoChange(index, 'backgroundImage', base64String);
+                    }
                 }
             };
             reader.readAsDataURL(file);
@@ -97,11 +123,36 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
         props.setSavingsRates(localSavingsRates);
         props.setDepositoRates(localDepositoRates);
         props.setPromoImages(localImages.filter(img => img.trim() !== ''));
-        
-        localStorage.setItem('bpr_kreditPromos', JSON.stringify(localPromos));
-        localStorage.setItem('bpr_savingsRates', JSON.stringify(localSavingsRates));
-        localStorage.setItem('bpr_depositoRates', JSON.stringify(localDepositoRates));
-        localStorage.setItem('bpr_promoImages', JSON.stringify(localImages.filter(img => img.trim() !== '')));
+
+        // Function to check if data size is within localStorage limits
+        const saveToStorage = (key: string, data: any) => {
+            try {
+                const serializedData = JSON.stringify(data);
+                // Check if data is too large for localStorage (most browsers allow ~5MB)
+                if (serializedData.length > 4 * 1024 * 1024) { // 4MB threshold to be safe
+                    console.error(`Data for ${key} is too large to store in localStorage. Consider using a server-side solution or compression.`);
+                    return false;
+                }
+
+                localStorage.setItem(key, serializedData);
+                return true;
+            } catch (error) {
+                if (error instanceof DOMException && (error.name === 'QuotaExceededError' || error.name === 'NS_ERROR_DOM_QUOTA_REACHED')) {
+                    console.error(`localStorage quota exceeded for key: ${key}`);
+                    // Attempt to clear and retry with smaller data
+                    // TODO: Implement image compression or storage on server for large images
+                    return false;
+                }
+                console.error(`Error saving to localStorage for key: ${key}`, error);
+                return false;
+            }
+        };
+
+        // Save data with error handling
+        saveToStorage('bpr_kreditPromos', localPromos);
+        saveToStorage('bpr_savingsRates', localSavingsRates);
+        saveToStorage('bpr_depositoRates', localDepositoRates);
+        saveToStorage('bpr_promoImages', localImages.filter(img => img.trim() !== ''));
 
         onClose();
     };
