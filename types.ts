@@ -54,3 +54,8 @@ export interface DepositoRate {
   tenor: string;
   rate: string;
 }
+
+export interface QueueState {
+  teller: number;
+  cs: number;
+}

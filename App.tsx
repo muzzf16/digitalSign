@@ -1,12 +1,14 @@
+
 // Fix: Corrected the import statement for React and its hooks.
 import React, { useState, useEffect } from 'react';
 import Header from './components/Header';
 import Sidebar from './components/Sidebar';
 import NewsTicker from './components/NewsTicker';
 import AdminPanel from './components/AdminPanel';
+import StaffQueuePanel from './components/StaffQueuePanel';
 import SettingsIcon from './components/icons/SettingsIcon';
 import { fetchEconomicData } from './services/economicDataService';
-import type { EconomicData, KreditPromo, InterestRate, DepositoRate } from './types';
+import type { EconomicData, KreditPromo, InterestRate, DepositoRate, QueueState } from './types';
 import { MOCK_CURRENCY_RATES, MOCK_GOLD_PRICE, MOCK_NEWS_ITEMS, MOCK_STOCK_DATA, KREDIT_PROMOS, PROMO_IMAGES, SAVINGS_RATES, MOCK_DEPOSITO_RATES } from './constants';
 import PromoCarousel from './components/PromoCarousel';
 
@@ -53,6 +55,17 @@ const PromoContent: React.FC<{ promo: KreditPromo | null }> = ({ promo }) => {
 
 
 const App: React.FC = () => {
+  // --- View Mode Logic (Standard vs Teller vs CS) ---
+  const [viewMode, setViewMode] = useState<'standard' | 'teller' | 'cs'>('standard');
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const mode = params.get('mode');
+    if (mode === 'teller') setViewMode('teller');
+    else if (mode === 'cs') setViewMode('cs');
+    else setViewMode('standard');
+  }, []);
+
   // State for external data
   const [economicData, setEconomicData] = useState<Omit<EconomicData, 'newsItems'>>({
     currencyRates: MOCK_CURRENCY_RATES,
@@ -66,6 +79,9 @@ const App: React.FC = () => {
   const [savingsRates, setSavingsRates] = useState<InterestRate[]>(() => loadFromLocalStorage('bpr_savingsRates', SAVINGS_RATES));
   const [depositoRates, setDepositoRates] = useState<DepositoRate[]>(() => loadFromLocalStorage('bpr_depositoRates', MOCK_DEPOSITO_RATES));
   const [promoImages, setPromoImages] = useState<string[]>(() => loadFromLocalStorage('bpr_promoImages', PROMO_IMAGES));
+  
+  // State for Queue
+  const [queueState, setQueueState] = useState<QueueState>(() => loadFromLocalStorage('bpr_queue', { teller: 0, cs: 0 }));
 
   const [promoIndex, setPromoIndex] = useState(0);
   const [isAdminPanelOpen, setIsAdminPanelOpen] = useState(false);
@@ -97,40 +113,29 @@ const App: React.FC = () => {
 
     return () => clearInterval(intervalId);
   }, []);
-
-  // Auto-refresh interval for background images (e.g., every 30 minutes) - set to 0 to disable
-  const BG_REFRESH_INTERVAL = 3 * 60 * 1000; // 30 minutes in milliseconds (set to 0 to disable)
-
+  
+  // Persist queue state changes AND Sync across tabs
   useEffect(() => {
-      if (BG_REFRESH_INTERVAL > 0) {
-          const bgRefreshTimer = setInterval(() => {
-              // Force refresh of background images by adding timestamp to URLs
-              setPromoImages(prevImages =>
-                prevImages.map(img =>
-                  img.includes('?') ? `${img}&t=${Date.now()}` : `${img}?t=${Date.now()}`
-                )
-              );
-          }, BG_REFRESH_INTERVAL);
+      // Save to local storage whenever state changes (triggering storage event in other tabs)
+      localStorage.setItem('bpr_queue', JSON.stringify(queueState));
+  }, [queueState]);
 
-          return () => {
-              clearInterval(bgRefreshTimer);
-          };
-      }
-  }, []);
-
-  // Full page refresh interval (e.g., every 6 hours) - set to 0 to disable
-  const PAGE_REFRESH_INTERVAL = 1 * 60 * 60 * 1000; // 6 hours in milliseconds (set to 0 to disable)
-
+  // Listen for changes from other tabs (e.g. Teller Panel updating the queue)
   useEffect(() => {
-      if (PAGE_REFRESH_INTERVAL > 0) {
-          const pageRefreshTimer = setInterval(() => {
-              window.location.reload();
-          }, PAGE_REFRESH_INTERVAL);
-
-          return () => {
-              clearInterval(pageRefreshTimer);
-          };
-      }
+      const handleStorageChange = (e: StorageEvent) => {
+          if (e.key === 'bpr_queue' && e.newValue) {
+              const newState = JSON.parse(e.newValue);
+              setQueueState(newState);
+              
+              // Optional: If we are in standard mode (TV), we could trigger sound here if needed.
+              // But for simplicity, the sound is triggered by the Controller. 
+              // If Controller and TV are separate devices, sound on TV needs polling or websocket.
+              // For this implementation, we assume Controller generates sound or user accepts visual update on TV.
+          }
+      };
+      
+      window.addEventListener('storage', handleStorageChange);
+      return () => window.removeEventListener('storage', handleStorageChange);
   }, []);
 
   useEffect(() => {
@@ -150,8 +155,19 @@ const App: React.FC = () => {
   
   const currentPromo = kreditPromos.length > 0 ? kreditPromos[promoIndex] : null;
 
+  // --- Render Specific Views ---
+  
+  if (viewMode === 'teller') {
+    return <StaffQueuePanel role="teller" queueState={queueState} setQueueState={setQueueState} />;
+  }
+  
+  if (viewMode === 'cs') {
+    return <StaffQueuePanel role="cs" queueState={queueState} setQueueState={setQueueState} />;
+  }
+
+  // --- Standard Digital Signage View ---
   return (
-    <div className="w-screen h-screen relative overflow-hidden">
+    <div className="bg-[#0a192f] w-screen h-screen relative overflow-hidden">
       <div className="absolute inset-0 w-full h-full">
         <PromoCarousel 
           images={promoImages.length > 0 ? promoImages : ['https://picsum.photos/1920/1080?grayscale']} 
@@ -173,6 +189,7 @@ const App: React.FC = () => {
                   kreditPromos={kreditPromos}
                   savingsRates={savingsRates}
                   depositoRates={depositoRates}
+                  queueState={queueState}
                 />
             </div>
         </main>
@@ -190,6 +207,8 @@ const App: React.FC = () => {
               setDepositoRates={setDepositoRates}
               promoImages={promoImages}
               setPromoImages={setPromoImages}
+              queueState={queueState}
+              setQueueState={setQueueState}
               onClose={() => setIsAdminPanelOpen(false)}
           />
       )}

@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import type { CurrencyRate, GoldPrice, StockData, KreditPromo, InterestRate, DepositoRate } from '../types';
+import type { CurrencyRate, GoldPrice, StockData, KreditPromo, InterestRate, DepositoRate, QueueState } from '../types';
 import { useCurrentTime } from '../hooks/useCurrentTime';
 import SunIcon from './icons/SunIcon';
 
@@ -42,6 +42,36 @@ const InfoCarousel: React.FC<{ items: React.ReactNode[], interval?: number }> = 
 const Widget: React.FC<{ children: React.ReactNode, className?: string }> = ({ children, className = '' }) => (
     <div className={`bg-[#080f69] rounded-2xl p-4 text-white shadow-2xl shadow-black/50 ${className}`}>
         {children}
+    </div>
+);
+
+const QueueWidget: React.FC<{ state: QueueState }> = ({ state }) => (
+    <div className="flex flex-col gap-3 mb-4 flex-shrink-0">
+        <div className="bg-gradient-to-br from-blue-600 to-blue-900 rounded-xl p-4 shadow-lg border-l-4 border-blue-400 flex justify-between items-center relative overflow-hidden group">
+            <div className="absolute right-0 top-0 p-4 opacity-10">
+                <svg width="64" height="64" viewBox="0 0 24 24" fill="currentColor"><path d="M4 6h18V4H4c-1.1 0-2 .9-2 2v11H0v3h14v-3H4V6zm19 2h-6c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h6c.55 0 1-.45 1-1V9c0-.55-.45-1-1-1zm-1 9h-4v-7h4v7z"/></svg>
+            </div>
+            <div>
+                <p className="text-blue-200 text-sm font-medium uppercase tracking-wider">Antrian Teller</p>
+                <p className="text-blue-100 text-xs mt-1">Menuju Loket 1</p>
+            </div>
+            <div className="text-5xl font-bold text-white tracking-tight z-10">
+                A-{String(state.teller).padStart(3, '0')}
+            </div>
+        </div>
+
+        <div className="bg-gradient-to-br from-emerald-600 to-emerald-900 rounded-xl p-4 shadow-lg border-l-4 border-emerald-400 flex justify-between items-center relative overflow-hidden">
+             <div className="absolute right-0 top-0 p-4 opacity-10">
+                <svg width="64" height="64" viewBox="0 0 24 24" fill="currentColor"><path d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-7 12h-2v-2h2v2zm0-4h-2V6h2v4z"/></svg>
+            </div>
+            <div>
+                <p className="text-emerald-200 text-sm font-medium uppercase tracking-wider">Antrian CS</p>
+                <p className="text-emerald-100 text-xs mt-1">Menuju CS 1</p>
+            </div>
+             <div className="text-5xl font-bold text-white tracking-tight z-10">
+                B-{String(state.cs).padStart(3, '0')}
+            </div>
+        </div>
     </div>
 );
 
@@ -131,10 +161,11 @@ interface SidebarProps {
   kreditPromos: KreditPromo[];
   savingsRates: InterestRate[];
   depositoRates: DepositoRate[];
+  queueState: QueueState;
 }
 
 const Sidebar: React.FC<SidebarProps> = (props) => {
-  const { currencyRates, goldPrice, stockData, kreditPromos, savingsRates, depositoRates } = props;
+  const { currencyRates, goldPrice, stockData, kreditPromos, savingsRates, depositoRates, queueState } = props;
   const contentRef = useRef<HTMLDivElement>(null);
   const [animationDuration, setAnimationDuration] = useState('50s');
 
@@ -172,18 +203,22 @@ const Sidebar: React.FC<SidebarProps> = (props) => {
   );
 
   return (
-    <aside className="w-full h-full text-white overflow-hidden">
-      <div 
-        className="sidebar-scroll-wrapper"
-        style={{ animationDuration }}
-      >
-        <div ref={contentRef} className="flex flex-col gap-4">
-          {sidebarContent}
-        </div>
-        {/* Always duplicate content for a seamless animation loop */}
-        <div className="flex flex-col gap-4 pt-4">
-          {sidebarContent}
-        </div>
+    <aside className="w-full h-full text-white flex flex-col overflow-hidden">
+      <QueueWidget state={queueState} />
+      
+      <div className="flex-1 relative overflow-hidden rounded-2xl">
+          <div 
+            className="sidebar-scroll-wrapper absolute w-full"
+            style={{ animationDuration }}
+          >
+            <div ref={contentRef} className="flex flex-col gap-4">
+              {sidebarContent}
+            </div>
+            {/* Always duplicate content for a seamless animation loop */}
+            <div className="flex flex-col gap-4 pt-4">
+              {sidebarContent}
+            </div>
+          </div>
       </div>
     </aside>
   );

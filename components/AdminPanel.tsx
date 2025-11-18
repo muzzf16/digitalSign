@@ -1,5 +1,6 @@
+
 import React, { useState } from 'react';
-import type { KreditPromo, InterestRate, DepositoRate } from '../types';
+import type { KreditPromo, InterestRate, DepositoRate, QueueState } from '../types';
 
 interface AdminPanelProps {
     kreditPromos: KreditPromo[];
@@ -10,11 +11,13 @@ interface AdminPanelProps {
     setDepositoRates: React.Dispatch<React.SetStateAction<DepositoRate[]>>;
     promoImages: string[];
     setPromoImages: React.Dispatch<React.SetStateAction<string[]>>;
+    queueState: QueueState;
+    setQueueState: React.Dispatch<React.SetStateAction<QueueState>>;
     onClose: () => void;
 }
 
 const AdminPanel: React.FC<AdminPanelProps> = (props) => {
-    const { onClose } = props;
+    const { onClose, setQueueState, queueState } = props;
 
     // Local state for form editing
     const [localPromos, setLocalPromos] = useState<KreditPromo[]>(props.kreditPromos);
@@ -22,6 +25,58 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
     const [localDepositoRates, setLocalDepositoRates] = useState<DepositoRate[]>(props.depositoRates);
     const [localImages, setLocalImages] = useState<string[]>(props.promoImages);
     
+    // --- Audio Announcement Logic ---
+    const playAnnouncement = (type: 'teller' | 'cs', number: number) => {
+        if (!('speechSynthesis' in window)) {
+            alert("Browser Anda tidak mendukung fitur Text-to-Speech.");
+            return;
+        }
+
+        // Cancel previous speech to avoid overlap
+        window.speechSynthesis.cancel();
+
+        const prefix = type === 'teller' ? 'A' : 'B';
+        const location = type === 'teller' ? 'Loket Satu' : 'Customer Service';
+        
+        // Create a natural sentence structure with pauses
+        const text = `Nomor Antrian... ${prefix}... ${number}... Silakan menuju... ${location}`;
+
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = 'id-ID'; // Set to Indonesian
+        utterance.rate = 0.85; // Slightly slower for clarity
+        utterance.pitch = 1.0;
+        utterance.volume = 1.0;
+
+        window.speechSynthesis.speak(utterance);
+    };
+
+    // Queue Logic
+    const updateQueue = (type: 'teller' | 'cs', delta: number) => {
+        // Calculate new value based on current props to ensure sync
+        const currentVal = queueState[type];
+        const newVal = Math.max(0, currentVal + delta);
+
+        setQueueState(prev => ({ ...prev, [type]: newVal }));
+
+        // Only announce if we are moving forward (Calling next)
+        if (delta > 0) {
+            playAnnouncement(type, newVal);
+        }
+    };
+    
+    const recallQueue = (type: 'teller' | 'cs') => {
+        const currentVal = queueState[type];
+        if (currentVal > 0) {
+            playAnnouncement(type, currentVal);
+        }
+    };
+    
+    const resetQueue = (type: 'teller' | 'cs') => {
+        if(confirm(`Reset antrian ${type === 'teller' ? 'Teller' : 'CS'} ke 0?`)) {
+             setQueueState(prev => ({ ...prev, [type]: 0 }));
+        }
+    };
+
     const handlePromoChange = (index: number, field: keyof KreditPromo, value: string) => {
         const updatedPromos = [...localPromos];
         updatedPromos[index] = { ...updatedPromos[index], [field]: value };
@@ -33,35 +88,9 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
         if (file) {
             const reader = new FileReader();
             reader.onload = (loadEvent) => {
-                let base64String = loadEvent.target?.result as string;
+                const base64String = loadEvent.target?.result as string;
                 if (base64String) {
-                    // Check for and compress large base64 images
-                    if (base64String.length > 1024 * 1024) { // If image is > 1MB
-                        // Create an image to compress
-                        const img = new Image();
-                        img.onload = () => {
-                            // Create a canvas to compress the image
-                            const canvas = document.createElement('canvas');
-                            const ctx = canvas.getContext('2d');
-
-                            // Calculate new dimensions (reduce by 50%)
-                            const maxWidth = img.width * 0.5;
-                            const maxHeight = img.height * 0.5;
-
-                            canvas.width = maxWidth;
-                            canvas.height = maxHeight;
-
-                            ctx?.drawImage(img, 0, 0, maxWidth, maxHeight);
-
-                            // Convert back to base64 with quality reduction
-                            const compressedBase64 = canvas.toDataURL('image/jpeg', 0.7); // 70% quality
-
-                            handlePromoChange(index, 'backgroundImage', compressedBase64);
-                        };
-                        img.src = base64String;
-                    } else {
-                        handlePromoChange(index, 'backgroundImage', base64String);
-                    }
+                    handlePromoChange(index, 'backgroundImage', base64String);
                 }
             };
             reader.readAsDataURL(file);
@@ -123,36 +152,11 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
         props.setSavingsRates(localSavingsRates);
         props.setDepositoRates(localDepositoRates);
         props.setPromoImages(localImages.filter(img => img.trim() !== ''));
-
-        // Function to check if data size is within localStorage limits
-        const saveToStorage = (key: string, data: any) => {
-            try {
-                const serializedData = JSON.stringify(data);
-                // Check if data is too large for localStorage (most browsers allow ~5MB)
-                if (serializedData.length > 4 * 1024 * 1024) { // 4MB threshold to be safe
-                    console.error(`Data for ${key} is too large to store in localStorage. Consider using a server-side solution or compression.`);
-                    return false;
-                }
-
-                localStorage.setItem(key, serializedData);
-                return true;
-            } catch (error) {
-                if (error instanceof DOMException && (error.name === 'QuotaExceededError' || error.name === 'NS_ERROR_DOM_QUOTA_REACHED')) {
-                    console.error(`localStorage quota exceeded for key: ${key}`);
-                    // Attempt to clear and retry with smaller data
-                    // TODO: Implement image compression or storage on server for large images
-                    return false;
-                }
-                console.error(`Error saving to localStorage for key: ${key}`, error);
-                return false;
-            }
-        };
-
-        // Save data with error handling
-        saveToStorage('bpr_kreditPromos', localPromos);
-        saveToStorage('bpr_savingsRates', localSavingsRates);
-        saveToStorage('bpr_depositoRates', localDepositoRates);
-        saveToStorage('bpr_promoImages', localImages.filter(img => img.trim() !== ''));
+        
+        localStorage.setItem('bpr_kreditPromos', JSON.stringify(localPromos));
+        localStorage.setItem('bpr_savingsRates', JSON.stringify(localSavingsRates));
+        localStorage.setItem('bpr_depositoRates', JSON.stringify(localDepositoRates));
+        localStorage.setItem('bpr_promoImages', JSON.stringify(localImages.filter(img => img.trim() !== '')));
 
         onClose();
     };
@@ -166,6 +170,94 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                 </header>
                 
                 <main className="flex-1 p-6 overflow-y-auto space-y-8 text-white">
+                    
+                    {/* Queue Control Section */}
+                    <section className="bg-slate-800/50 p-4 rounded-lg border border-slate-700">
+                        <div className="flex justify-between items-start mb-4">
+                            <h3 className="text-xl font-semibold text-white flex items-center gap-2">
+                                <span className="bg-amber-500 w-2 h-6 rounded-full inline-block"></span>
+                                Kontrol Antrian (dengan Suara)
+                            </h3>
+                            
+                            {/* Quick Access Links for Staff Views */}
+                            <div className="flex gap-2">
+                                <a 
+                                    href="/?mode=teller" 
+                                    target="_blank" 
+                                    rel="noopener noreferrer"
+                                    className="flex items-center gap-2 text-xs bg-blue-900/40 text-blue-300 border border-blue-700/50 px-3 py-1.5 rounded hover:bg-blue-800 transition-colors"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3 h-3">
+                                        <path fillRule="evenodd" d="M15.75 2.25H21a.75.75 0 01.75.75v5.25a.75.75 0 01-1.5 0V4.81L8.03 17.03a.75.75 0 01-1.06-1.06L19.19 3.75h-3.44a.75.75 0 010-1.5zm-10.5 4.5a1.5 1.5 0 00-1.5 1.5v10.5a1.5 1.5 0 001.5 1.5h10.5a1.5 1.5 0 001.5-1.5V10.5a.75.75 0 011.5 0v8.25a3 3 0 01-3 3H5.25a3 3 0 01-3-3V8.25a3 3 0 013-3h8.25a.75.75 0 010 1.5H5.25z" clipRule="evenodd" />
+                                    </svg>
+                                    Buka Panel Teller
+                                </a>
+                                <a 
+                                    href="/?mode=cs" 
+                                    target="_blank" 
+                                    rel="noopener noreferrer"
+                                    className="flex items-center gap-2 text-xs bg-emerald-900/40 text-emerald-300 border border-emerald-700/50 px-3 py-1.5 rounded hover:bg-emerald-800 transition-colors"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3 h-3">
+                                        <path fillRule="evenodd" d="M15.75 2.25H21a.75.75 0 01.75.75v5.25a.75.75 0 01-1.5 0V4.81L8.03 17.03a.75.75 0 01-1.06-1.06L19.19 3.75h-3.44a.75.75 0 010-1.5zm-10.5 4.5a1.5 1.5 0 00-1.5 1.5v10.5a1.5 1.5 0 001.5 1.5h10.5a1.5 1.5 0 001.5-1.5V10.5a.75.75 0 011.5 0v8.25a3 3 0 01-3 3H5.25a3 3 0 01-3-3V8.25a3 3 0 013-3h8.25a.75.75 0 010 1.5H5.25z" clipRule="evenodd" />
+                                    </svg>
+                                    Buka Panel CS
+                                </a>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {/* Teller Control */}
+                            <div className="bg-slate-700/50 p-4 rounded-lg flex flex-col items-center relative">
+                                <span className="text-slate-400 text-sm uppercase tracking-wider mb-2">Antrian Teller (A)</span>
+                                <div className="text-5xl font-bold text-white mb-4">A-{String(props.queueState.teller).padStart(3, '0')}</div>
+                                <div className="flex gap-2 w-full">
+                                     <button onClick={() => updateQueue('teller', -1)} className="w-12 bg-slate-600 hover:bg-slate-500 py-2 rounded text-white font-bold">-</button>
+                                     <button onClick={() => updateQueue('teller', 1)} className="flex-1 bg-blue-600 hover:bg-blue-500 py-2 rounded text-white font-bold flex items-center justify-center gap-2">
+                                        <span>Panggil Berikutnya</span>
+                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
+                                          <path d="M13.5 4.06c0-1.336-1.616-2.005-2.56-1.06l-4.5 4.5H4.508c-1.141 0-2.318.664-2.66 1.905A9.76 9.76 0 001.5 12c0 .898.121 1.768.35 2.595.341 1.24 1.518 1.905 2.659 1.905h1.93l4.5 4.5c.945.945 2.561.276 2.561-1.06V4.06zM18.584 5.106a.75.75 0 011.06 0c3.808 3.807 3.808 9.98 0 13.788a.75.75 0 11-1.06-1.06 8.25 8.25 0 000-11.668.75.75 0 010-1.06z" />
+                                          <path d="M15.932 7.757a.75.75 0 011.061 0 6 6 0 010 8.486.75.75 0 01-1.06-1.061 4.5 4.5 0 000-6.364.75.75 0 010-1.06z" />
+                                        </svg>
+                                     </button>
+                                </div>
+                                <div className="flex justify-between w-full mt-3">
+                                    <button onClick={() => resetQueue('teller')} className="text-xs text-red-400 hover:text-red-300 underline">Reset</button>
+                                    <button onClick={() => recallQueue('teller')} className="text-xs text-amber-400 hover:text-amber-300 underline flex items-center gap-1">
+                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3 h-3">
+                                            <path fillRule="evenodd" d="M4.755 10.059a7.5 7.5 0 0112.548-3.364l1.903 1.903h-3.183a.75.75 0 100 1.5h4.992a.75.75 0 00.75-.75V4.356a.75.75 0 00-1.5 0v3.18l-1.9-1.9A9 9 0 003.306 9.67a.75.75 0 101.45.388zm15.408 3.352a.75.75 0 00-.919.53 7.5 7.5 0 01-12.548 3.364l-1.902-1.903h3.183a.75.75 0 000-1.5H2.984a.75.75 0 00-.75.75v4.992a.75.75 0 001.5 0v-3.18l1.9 1.9a9 9 0 0015.059-4.035.75.75 0 00-.53-.919z" clipRule="evenodd" />
+                                        </svg>
+                                        Panggil Ulang
+                                    </button>
+                                </div>
+                            </div>
+                             {/* CS Control */}
+                             <div className="bg-slate-700/50 p-4 rounded-lg flex flex-col items-center relative">
+                                <span className="text-slate-400 text-sm uppercase tracking-wider mb-2">Antrian CS (B)</span>
+                                <div className="text-5xl font-bold text-white mb-4">B-{String(props.queueState.cs).padStart(3, '0')}</div>
+                                <div className="flex gap-2 w-full">
+                                     <button onClick={() => updateQueue('cs', -1)} className="w-12 bg-slate-600 hover:bg-slate-500 py-2 rounded text-white font-bold">-</button>
+                                     <button onClick={() => updateQueue('cs', 1)} className="flex-1 bg-emerald-600 hover:bg-emerald-500 py-2 rounded text-white font-bold flex items-center justify-center gap-2">
+                                        <span>Panggil Berikutnya</span>
+                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
+                                          <path d="M13.5 4.06c0-1.336-1.616-2.005-2.56-1.06l-4.5 4.5H4.508c-1.141 0-2.318.664-2.66 1.905A9.76 9.76 0 001.5 12c0 .898.121 1.768.35 2.595.341 1.24 1.518 1.905 2.659 1.905h1.93l4.5 4.5c.945.945 2.561.276 2.561-1.06V4.06zM18.584 5.106a.75.75 0 011.06 0c3.808 3.807 3.808 9.98 0 13.788a.75.75 0 11-1.06-1.06 8.25 8.25 0 000-11.668.75.75 0 010-1.06z" />
+                                          <path d="M15.932 7.757a.75.75 0 011.061 0 6 6 0 010 8.486.75.75 0 01-1.06-1.061 4.5 4.5 0 000-6.364.75.75 0 010-1.06z" />
+                                        </svg>
+                                     </button>
+                                </div>
+                                <div className="flex justify-between w-full mt-3">
+                                    <button onClick={() => resetQueue('cs')} className="text-xs text-red-400 hover:text-red-300 underline">Reset</button>
+                                    <button onClick={() => recallQueue('cs')} className="text-xs text-amber-400 hover:text-amber-300 underline flex items-center gap-1">
+                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3 h-3">
+                                            <path fillRule="evenodd" d="M4.755 10.059a7.5 7.5 0 0112.548-3.364l1.903 1.903h-3.183a.75.75 0 100 1.5h4.992a.75.75 0 00.75-.75V4.356a.75.75 0 00-1.5 0v3.18l-1.9-1.9A9 9 0 003.306 9.67a.75.75 0 101.45.388zm15.408 3.352a.75.75 0 00-.919.53 7.5 7.5 0 01-12.548 3.364l-1.902-1.903h3.183a.75.75 0 000-1.5H2.984a.75.75 0 00-.75.75v4.992a.75.75 0 001.5 0v-3.18l1.9 1.9a9 9 0 0015.059-4.035.75.75 0 00-.53-.919z" clipRule="evenodd" />
+                                        </svg>
+                                        Panggil Ulang
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
                     {/* Promo Kredit Section */}
                     <section>
                         <h3 className="text-xl font-semibold mb-4 text-amber-400">Manajemen Promo</h3>

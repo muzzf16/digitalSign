@@ -6,7 +6,7 @@ export default defineConfig(({ mode }) => {
     const env = loadEnv(mode, '.', '');
     return {
       server: {
-        port: 3025,
+        port: 3000,
         host: '0.0.0.0',
       },
       plugins: [react()],
@@ -18,9 +18,6 @@ export default defineConfig(({ mode }) => {
         alias: {
           '@': path.resolve(__dirname, '.'),
         }
-      },
-      css: {
-        postcss: './postcss.config.js',
-      },
+      }
     };
 });

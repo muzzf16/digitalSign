@@ -8,11 +8,7 @@ const Header: React.FC = () => {
     <header className="z-10 px-6 flex items-center justify-between h-[72px] bg-gradient-to-b from-black/60 to-transparent flex-shrink-0">
       {/* Left Side: Logo and Title */}
       <div className="flex items-center gap-4">
-        <img
-          src="/logo.png"
-          alt="Bank Logo"
-          className="w-12 h-12 rounded-full flex-shrink-0 object-contain"
-        />
+        <div className="w-12 h-12 bg-white/20 rounded-full flex-shrink-0"></div>
         <div>
           <h1 className="text-2xl font-semibold tracking-wide text-white">
             Bank Perekonomian Rakyat
