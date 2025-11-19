@@ -17,48 +17,20 @@ const parseScrapedIDR = (rate: string): string => {
 };
 
 const fetchHtmlFromProxy = async (targetUrl: string): Promise<string | null> => {
-    const proxies = [
-        // Attempt 1: allorigins.win (Returns JSON { contents: "..." })
-        // Best for avoiding CORS issues cleanly
-        {
-            name: 'allorigins',
-            getUrl: (url: string) => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
-            extract: async (res: Response) => {
-                const data = await res.json();
-                return data.contents;
-            }
-        },
-        // Attempt 2: CodeTabs (Returns raw HTML)
-        // Reliable fallback
-        {
-             name: 'codetabs',
-             getUrl: (url: string) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
-             extract: (res: Response) => res.text()
-        },
-        // Attempt 3: corsproxy.io (Returns raw HTML)
-        // Sometimes returns 403 Forbidden depending on headers/origin
-        {
-            name: 'corsproxy',
-            getUrl: (url: string) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
-            extract: (res: Response) => res.text()
-        }
-    ];
+    // We now use our local Node.js proxy server to avoid CORS and stability issues.
+    // Ensure you are running 'node server.js' in a separate terminal.
+    const LOCAL_PROXY_URL = 'http://localhost:3001/proxy';
 
-    for (const proxy of proxies) {
-        try {
-            const response = await fetch(proxy.getUrl(targetUrl));
-            if (response.ok) {
-                const content = await proxy.extract(response);
-                // Basic validation to ensure we got some content back
-                if (content && typeof content === 'string' && content.length > 100) {
-                    return content;
-                }
-            } else {
-                console.warn(`Proxy ${proxy.name} returned status ${response.status}`);
-            }
-        } catch (e) {
-            console.warn(`Proxy ${proxy.name} failed for ${targetUrl}:`, e);
+    try {
+        const response = await fetch(`${LOCAL_PROXY_URL}?url=${encodeURIComponent(targetUrl)}`);
+        
+        if (response.ok) {
+            return await response.text();
+        } else {
+            console.warn(`Local proxy returned status ${response.status} for ${targetUrl}`);
         }
+    } catch (e) {
+        console.warn(`Failed to connect to local proxy at ${LOCAL_PROXY_URL}. Is 'node server.js' running?`, e);
     }
 
     return null;
@@ -70,7 +42,7 @@ const fetchBcaRates = async (): Promise<CurrencyRate[] | null> => {
     const htmlContent = await fetchHtmlFromProxy(targetUrl);
 
     if (!htmlContent) {
-        console.warn("Failed to retrieve BCA content from all proxies. Using mock data.");
+        console.warn("Failed to retrieve BCA content from local proxy. Using mock data.");
         return null;
     }
 
