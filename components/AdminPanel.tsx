@@ -1,6 +1,7 @@
 
 import React, { useState } from 'react';
 import type { KreditPromo, InterestRate, DepositoRate, QueueState } from '../types';
+import { announceQueue } from '../utils/audio';
 
 interface AdminPanelProps {
     kreditPromos: KreditPromo[];
@@ -26,29 +27,7 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
     const [localImages, setLocalImages] = useState<string[]>(props.promoImages);
     
     // --- Audio Announcement Logic ---
-    const playAnnouncement = (type: 'teller' | 'cs', number: number) => {
-        if (!('speechSynthesis' in window)) {
-            alert("Browser Anda tidak mendukung fitur Text-to-Speech.");
-            return;
-        }
-
-        // Cancel previous speech to avoid overlap
-        window.speechSynthesis.cancel();
-
-        const prefix = type === 'teller' ? 'A' : 'B';
-        const location = type === 'teller' ? 'Loket Satu' : 'Customer Service';
-        
-        // Create a natural sentence structure with pauses
-        const text = `Nomor Antrian... ${prefix}... ${number}... Silakan menuju... ${location}`;
-
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = 'id-ID'; // Set to Indonesian
-        utterance.rate = 0.85; // Slightly slower for clarity
-        utterance.pitch = 1.0;
-        utterance.volume = 1.0;
-
-        window.speechSynthesis.speak(utterance);
-    };
+    // Replaced by utils/audio.ts announceQueue function
 
     // Queue Logic
     const updateQueue = (type: 'teller' | 'cs', delta: number) => {
@@ -60,14 +39,18 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
 
         // Only announce if we are moving forward (Calling next)
         if (delta > 0) {
-            playAnnouncement(type, newVal);
+            const prefix = type === 'teller' ? 'A' : 'B';
+            const location = type === 'teller' ? 'Loket Satu' : 'Meja Customer Service';
+            announceQueue(prefix, newVal, location);
         }
     };
     
     const recallQueue = (type: 'teller' | 'cs') => {
         const currentVal = queueState[type];
         if (currentVal > 0) {
-            playAnnouncement(type, currentVal);
+            const prefix = type === 'teller' ? 'A' : 'B';
+            const location = type === 'teller' ? 'Loket Satu' : 'Meja Customer Service';
+            announceQueue(prefix, currentVal, location);
         }
     };
     

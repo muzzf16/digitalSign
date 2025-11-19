@@ -1,5 +1,7 @@
+
 import React from 'react';
 import type { QueueState } from '../types';
+import { announceQueue } from '../utils/audio';
 
 interface StaffQueuePanelProps {
   role: 'teller' | 'cs';
@@ -13,29 +15,18 @@ const StaffQueuePanel: React.FC<StaffQueuePanelProps> = ({ role, queueState, set
   const currentNumber = isTeller ? queueState.teller : queueState.cs;
   const prefix = isTeller ? 'A' : 'B';
   const colorClass = isTeller ? 'blue' : 'emerald';
+  const locationName = isTeller ? 'Loket Satu' : 'Meja Customer Service';
   
-  const playAnnouncement = (num: number) => {
-      if (!('speechSynthesis' in window)) return;
-      window.speechSynthesis.cancel();
-      
-      const location = isTeller ? 'Loket Satu' : 'Customer Service';
-      const text = `Nomor Antrian... ${prefix}... ${num}... Silakan menuju... ${location}`;
-
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = 'id-ID';
-      utterance.rate = 0.85;
-      window.speechSynthesis.speak(utterance);
-  };
-
   const handleNext = () => {
     const newVal = currentNumber + 1;
     setQueueState(prev => ({ ...prev, [role]: newVal }));
-    playAnnouncement(newVal);
+    // Menggunakan utility audio baru dengan efek chime + suara pramugari
+    announceQueue(prefix, newVal, locationName);
   };
 
   const handleRecall = () => {
     if (currentNumber > 0) {
-      playAnnouncement(currentNumber);
+      announceQueue(prefix, currentNumber, locationName);
     }
   };
 
