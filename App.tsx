@@ -30,10 +30,15 @@ const loadFromLocalStorage = <T,>(key: string, defaultValue: T): T => {
 const PromoContent: React.FC<{ promo: KreditPromo | null }> = ({ promo }) => {
   if (!promo) return null;
 
+  // Generate a unique key based on content.
+  // Changing the key forces React to destroy and recreate the component,
+  // which triggers the CSS animation to play from the start.
+  const animationKey = `${promo.title}-${promo.rate}`;
+
   // Jika promo memiliki gambar (mode poster), tampilkan hanya gambar.
   if (promo.backgroundImage) {
     return (
-      <div className="relative w-full h-full overflow-hidden rounded-lg">
+      <div key={animationKey} className="relative w-full h-full overflow-hidden rounded-lg animate-content-enter">
         <img
           src={promo.backgroundImage}
           alt={promo.title}
@@ -45,7 +50,7 @@ const PromoContent: React.FC<{ promo: KreditPromo | null }> = ({ promo }) => {
 
   // Jika promo berbasis teks, tampilkan teks dengan ukuran lebih besar.
   return (
-    <div className="relative w-full h-full flex flex-col justify-center p-12 text-white overflow-hidden">
+    <div key={animationKey} className="relative w-full h-full flex flex-col justify-center p-12 text-white overflow-hidden animate-content-enter">
       <h2 className="text-6xl font-bold leading-tight drop-shadow-lg">{promo.title}</h2>
       <p className="text-3xl font-light drop-shadow-md mt-4">{promo.description}</p>
       <p className="text-8xl font-bold text-amber-400 mt-8 drop-shadow-xl">{promo.rate}</p>
@@ -116,21 +121,26 @@ const App: React.FC = () => {
   
   // Persist queue state changes AND Sync across tabs
   useEffect(() => {
-      // Save to local storage whenever state changes (triggering storage event in other tabs)
-      localStorage.setItem('bpr_queue', JSON.stringify(queueState));
+      try {
+        // Save to local storage whenever state changes (triggering storage event in other tabs)
+        localStorage.setItem('bpr_queue', JSON.stringify(queueState));
+      } catch (e) {
+        // Silently ignore storage errors for queue updates to prevent console spam
+        // Queue will still work in memory for this tab
+        console.warn("Failed to persist queue state (Storage Full?)");
+      }
   }, [queueState]);
 
   // Listen for changes from other tabs (e.g. Teller Panel updating the queue)
   useEffect(() => {
       const handleStorageChange = (e: StorageEvent) => {
           if (e.key === 'bpr_queue' && e.newValue) {
-              const newState = JSON.parse(e.newValue);
-              setQueueState(newState);
-              
-              // Optional: If we are in standard mode (TV), we could trigger sound here if needed.
-              // But for simplicity, the sound is triggered by the Controller. 
-              // If Controller and TV are separate devices, sound on TV needs polling or websocket.
-              // For this implementation, we assume Controller generates sound or user accepts visual update on TV.
+              try {
+                const newState = JSON.parse(e.newValue);
+                setQueueState(newState);
+              } catch (err) {
+                console.error("Failed to parse synced queue state", err);
+              }
           }
       };
       

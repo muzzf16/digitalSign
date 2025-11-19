@@ -97,6 +97,12 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
     const handlePromoImageUpload = (e: React.ChangeEvent<HTMLInputElement>, index: number) => {
         const file = e.target.files?.[0];
         if (file) {
+            // Check file size (limit to approx 500KB to prevent localStorage overflow)
+            if (file.size > 500 * 1024) {
+                alert("Ukuran file terlalu besar! Mohon gunakan gambar di bawah 500KB agar penyimpanan tidak penuh.");
+                return;
+            }
+
             const reader = new FileReader();
             reader.onload = (loadEvent) => {
                 const base64String = loadEvent.target?.result as string;
@@ -169,23 +175,42 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
     };
 
     const handleSave = () => {
+        // 1. Update Parent State Immediately (So UI updates even if storage fails)
         props.setKreditPromos(localPromos);
         props.setSavingsRates(localSavingsRates);
         props.setDepositoRates(localDepositoRates);
         props.setPromoImages(localImages.filter(img => img.trim() !== ''));
         
-        localStorage.setItem('bpr_kreditPromos', JSON.stringify(localPromos));
-        localStorage.setItem('bpr_savingsRates', JSON.stringify(localSavingsRates));
-        localStorage.setItem('bpr_depositoRates', JSON.stringify(localDepositoRates));
-        localStorage.setItem('bpr_promoImages', JSON.stringify(localImages.filter(img => img.trim() !== '')));
-        
-        // Save audio settings explicitly
+        // 2. Save Audio Settings FIRST (Prioritize this as it is small and critical)
         saveAudioSettings(audioSettings);
-        
-        // Optional: Visual feedback (alert is simple)
-        // alert("Pengaturan berhasil disimpan!"); 
 
-        onClose();
+        // 3. Save Data to LocalStorage with Robust Error Handling for Quota Limits
+        try {
+            localStorage.setItem('bpr_savingsRates', JSON.stringify(localSavingsRates));
+            localStorage.setItem('bpr_depositoRates', JSON.stringify(localDepositoRates));
+            
+            // Promos and Images are the heavy ones - save them last
+            // If this fails due to size, the audio settings above are already safe
+            localStorage.setItem('bpr_kreditPromos', JSON.stringify(localPromos));
+            localStorage.setItem('bpr_promoImages', JSON.stringify(localImages.filter(img => img.trim() !== '')));
+            
+            alert("Pengaturan berhasil disimpan!");
+            onClose();
+        } catch (error: any) {
+            console.error("Storage failed:", error);
+            
+            let errorMessage = "Terjadi kesalahan saat menyimpan data ke penyimpanan browser.";
+            
+            // Detect Quota Exceeded Error
+            if (error.name === 'QuotaExceededError' || error.code === 22 || error.name === 'NS_ERROR_DOM_QUOTA_REACHED') {
+                errorMessage = "PENYIMPANAN PENUH! \n\nPengaturan Suara BERHASIL disimpan, tetapi Gambar Promo GAGAL disimpan.\n\nSolusi: Hapus beberapa gambar promo atau gunakan gambar dengan ukuran file lebih kecil.";
+            }
+            
+            alert(errorMessage);
+            // We still close the panel because the app state (in memory) is updated for this session.
+            // The user can reopen settings to fix the storage issue if they want.
+            onClose();
+        }
     };
 
     return (
