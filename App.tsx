@@ -11,8 +11,10 @@ import { fetchEconomicData } from './services/economicDataService';
 import type { EconomicData, KreditPromo, InterestRate, DepositoRate, QueueState } from './types';
 import { MOCK_CURRENCY_RATES, MOCK_GOLD_PRICE, MOCK_NEWS_ITEMS, MOCK_STOCK_DATA, KREDIT_PROMOS, PROMO_IMAGES, SAVINGS_RATES, MOCK_DEPOSITO_RATES } from './constants';
 import PromoCarousel from './components/PromoCarousel';
+import { initAppData } from './utils/imageStorage';
 
 // Helper to load data from localStorage or return a default value
+// Note: We keep this for lightweight data like Queue and Audio Settings
 const loadFromLocalStorage = <T,>(key: string, defaultValue: T): T => {
     try {
         const storedValue = localStorage.getItem(key);
@@ -20,7 +22,6 @@ const loadFromLocalStorage = <T,>(key: string, defaultValue: T): T => {
             return JSON.parse(storedValue);
         }
     } catch (error) {
-// Fix: Added curly braces to the catch block to correctly scope the error variable and fix a syntax error.
         console.error(`Error parsing localStorage key "${key}":`, error);
     }
     return defaultValue;
@@ -30,19 +31,17 @@ const loadFromLocalStorage = <T,>(key: string, defaultValue: T): T => {
 const PromoContent: React.FC<{ promo: KreditPromo | null }> = ({ promo }) => {
   if (!promo) return null;
 
-  // Generate a unique key based on content.
-  // Changing the key forces React to destroy and recreate the component,
-  // which triggers the CSS animation to play from the start.
+  // Generate a unique key based on content to trigger animation re-render
   const animationKey = `${promo.title}-${promo.rate}`;
 
   // Jika promo memiliki gambar (mode poster), tampilkan hanya gambar.
   if (promo.backgroundImage) {
     return (
-      <div key={animationKey} className="relative w-full h-full overflow-hidden rounded-lg animate-content-enter">
+      <div key={animationKey} className="relative w-full h-full overflow-hidden rounded-lg animate-content-enter flex items-center justify-center">
         <img
           src={promo.backgroundImage}
           alt={promo.title}
-          className="object-contain w-full h-full shadow-2xl"
+          className="object-contain max-w-full max-h-full shadow-2xl rounded-lg"
         />
       </div>
     );
@@ -79,18 +78,37 @@ const App: React.FC = () => {
   });
   const [newsItems, setNewsItems] = useState(MOCK_NEWS_ITEMS);
   
-  // State for admin-managed content
-  const [kreditPromos, setKreditPromos] = useState<KreditPromo[]>(() => loadFromLocalStorage('bpr_kreditPromos', KREDIT_PROMOS));
-  const [savingsRates, setSavingsRates] = useState<InterestRate[]>(() => loadFromLocalStorage('bpr_savingsRates', SAVINGS_RATES));
-  const [depositoRates, setDepositoRates] = useState<DepositoRate[]>(() => loadFromLocalStorage('bpr_depositoRates', MOCK_DEPOSITO_RATES));
-  const [promoImages, setPromoImages] = useState<string[]>(() => loadFromLocalStorage('bpr_promoImages', PROMO_IMAGES));
+  // State for admin-managed content (Initialized with defaults, then hydrated from DB)
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [kreditPromos, setKreditPromos] = useState<KreditPromo[]>(KREDIT_PROMOS);
+  const [savingsRates, setSavingsRates] = useState<InterestRate[]>(SAVINGS_RATES);
+  const [depositoRates, setDepositoRates] = useState<DepositoRate[]>(MOCK_DEPOSITO_RATES);
+  const [promoImages, setPromoImages] = useState<string[]>(PROMO_IMAGES);
   
-  // State for Queue
+  // State for Queue (Kept in LocalStorage for Tab Sync)
   const [queueState, setQueueState] = useState<QueueState>(() => loadFromLocalStorage('bpr_queue', { teller: 0, cs: 0 }));
 
   const [promoIndex, setPromoIndex] = useState(0);
   const [isAdminPanelOpen, setIsAdminPanelOpen] = useState(false);
   const [isSettingsVisible, setIsSettingsVisible] = useState(false);
+
+  // --- Hydrate Data from IndexedDB on Mount ---
+  useEffect(() => {
+      const loadData = async () => {
+          try {
+              const data = await initAppData();
+              if (data.logo) setLogoUrl(data.logo);
+              if (data.promos && data.promos.length > 0) setKreditPromos(data.promos);
+              if (data.carouselImages && data.carouselImages.length > 0) setPromoImages(data.carouselImages);
+              if (data.savings && data.savings.length > 0) setSavingsRates(data.savings);
+              if (data.deposito && data.deposito.length > 0) setDepositoRates(data.deposito);
+          } catch (error) {
+              console.error("Failed to load content from DB", error);
+          }
+      };
+      loadData();
+  }, []);
+
 
   useEffect(() => {
     const promoCount = kreditPromos.length;
@@ -98,7 +116,7 @@ const App: React.FC = () => {
 
     const timer = setInterval(() => {
         setPromoIndex((prevIndex) => (prevIndex + 1) % promoCount);
-    }, 7000);
+    }, 8000); // Increased slightly for better reading time
     return () => clearInterval(timer);
   }, [kreditPromos.length]);
 
@@ -122,16 +140,13 @@ const App: React.FC = () => {
   // Persist queue state changes AND Sync across tabs
   useEffect(() => {
       try {
-        // Save to local storage whenever state changes (triggering storage event in other tabs)
         localStorage.setItem('bpr_queue', JSON.stringify(queueState));
       } catch (e) {
-        // Silently ignore storage errors for queue updates to prevent console spam
-        // Queue will still work in memory for this tab
         console.warn("Failed to persist queue state (Storage Full?)");
       }
   }, [queueState]);
 
-  // Listen for changes from other tabs (e.g. Teller Panel updating the queue)
+  // Listen for changes from other tabs
   useEffect(() => {
       const handleStorageChange = (e: StorageEvent) => {
           if (e.key === 'bpr_queue' && e.newValue) {
@@ -150,7 +165,7 @@ const App: React.FC = () => {
 
   useEffect(() => {
       const handleMouseMove = (event: MouseEvent) => {
-          const hotZoneWidth = 100; // apx 100px from right edge
+          const hotZoneWidth = 100;
           const shouldBeVisible = window.innerWidth - event.clientX < hotZoneWidth;
           if (shouldBeVisible !== isSettingsVisible) {
               setIsSettingsVisible(shouldBeVisible);
@@ -177,21 +192,26 @@ const App: React.FC = () => {
 
   // --- Standard Digital Signage View ---
   return (
-    <div className="bg-[#0a192f] w-screen h-screen relative overflow-hidden">
-      <div className="absolute inset-0 w-full h-full">
+    <div className="bg-[#0a192f] w-screen h-screen relative overflow-hidden font-sans">
+      {/* Background Layer */}
+      <div className="absolute inset-0 w-full h-full z-0">
         <PromoCarousel 
           images={promoImages.length > 0 ? promoImages : ['https://picsum.photos/1920/1080?grayscale']} 
           currentIndex={promoImages.length > 0 ? promoIndex % promoImages.length : 0} 
         />
       </div>
 
-      <div className="absolute inset-0 w-full h-full flex flex-col">
-        <Header />
-        <main className="flex-1 grid grid-cols-3 gap-4 px-4 pb-4 min-h-0">
-            <div className="col-span-2 h-full min-h-0">
-                <PromoContent promo={currentPromo} />
+      {/* Content Layer */}
+      <div className="absolute inset-0 w-full h-full flex flex-col z-10">
+        <Header logoUrl={logoUrl} />
+        <main className="flex-1 grid grid-cols-3 gap-6 px-6 pb-6 min-h-0 pt-4">
+            <div className="col-span-2 h-full min-h-0 relative">
+                {/* Glassmorphism container for promo */}
+                <div className="absolute inset-0 bg-black/30 backdrop-blur-sm rounded-2xl border border-white/10 shadow-2xl overflow-hidden">
+                    <PromoContent promo={currentPromo} />
+                </div>
             </div>
-            <div className="col-span-1 h-full overflow-hidden">
+            <div className="col-span-1 h-full overflow-hidden rounded-2xl shadow-2xl bg-black/40 backdrop-blur-md border border-white/5">
                 <Sidebar 
                   currencyRates={economicData.currencyRates} 
                   goldPrice={economicData.goldPrice} 
@@ -206,7 +226,7 @@ const App: React.FC = () => {
         <NewsTicker items={newsItems} />
       </div>
 
-      {/* Admin Panel and Trigger Button */}
+      {/* Admin Panel */}
       {isAdminPanelOpen && (
           <AdminPanel
               kreditPromos={kreditPromos}
@@ -219,15 +239,18 @@ const App: React.FC = () => {
               setPromoImages={setPromoImages}
               queueState={queueState}
               setQueueState={setQueueState}
+              logoUrl={logoUrl}
+              setLogoUrl={setLogoUrl}
               onClose={() => setIsAdminPanelOpen(false)}
           />
       )}
+      
       <button 
         onClick={() => setIsAdminPanelOpen(true)}
-        className={`absolute bottom-16 right-6 p-2 rounded-full bg-black/40 hover:bg-black/70 transition-opacity duration-300 ease-in-out z-50 ${isSettingsVisible ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+        className={`absolute bottom-20 right-6 p-3 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/20 transition-all duration-300 ease-in-out z-50 ${isSettingsVisible ? 'opacity-100 translate-x-0' : 'opacity-0 translate-x-10 pointer-events-none'}`}
         aria-label="Buka Pengaturan Konten"
       >
-          <SettingsIcon className="w-8 h-8 text-white" />
+          <SettingsIcon className="w-6 h-6 text-white" />
       </button>
 
     </div>
