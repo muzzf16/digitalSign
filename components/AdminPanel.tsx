@@ -26,7 +26,7 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
     const [localDepositoRates, setLocalDepositoRates] = useState<DepositoRate[]>(props.depositoRates);
     const [localImages, setLocalImages] = useState<string[]>(props.promoImages);
     
-    // Audio Settings State
+    // Audio Settings State - Initialize directly from storage
     const [audioSettings, setAudioSettings] = useState<AudioSettings>(getAudioSettings());
     const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
 
@@ -35,9 +35,13 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
         const updateVoices = () => {
             const voices = window.speechSynthesis.getVoices();
             setAvailableVoices(voices);
-            // If no voice is selected yet, try to pick a default Indo voice
-            if (!audioSettings.voiceURI) {
-                 const indoVoice = voices.find(v => v.lang === 'id-ID');
+            
+            // Only set a default IF:
+            // 1. Voices are actually loaded (> 0)
+            // 2. AND there is no currently selected voiceURI in the settings
+            if (voices.length > 0 && !audioSettings.voiceURI) {
+                 const indoVoice = voices.find(v => v.lang === 'id-ID' && v.name.includes('Google')) || 
+                                   voices.find(v => v.lang === 'id-ID');
                  if (indoVoice) {
                      setAudioSettings(prev => ({...prev, voiceURI: indoVoice.voiceURI}));
                  }
@@ -45,10 +49,12 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
         };
 
         updateVoices();
+        
+        // Chrome requires this event listener
         if (window.speechSynthesis.onvoiceschanged !== undefined) {
             window.speechSynthesis.onvoiceschanged = updateVoices;
         }
-    }, []);
+    }, [audioSettings.voiceURI]); // Add dependency to prevent override loops
 
 
     // Queue Logic
@@ -158,6 +164,7 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
     };
 
     const testVoice = () => {
+        // Pass current local settings to test what is currently selected
         announceQueue('A', 123, 'Loket Tes', audioSettings);
     };
 
@@ -172,8 +179,11 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
         localStorage.setItem('bpr_depositoRates', JSON.stringify(localDepositoRates));
         localStorage.setItem('bpr_promoImages', JSON.stringify(localImages.filter(img => img.trim() !== '')));
         
-        // Save audio settings
+        // Save audio settings explicitly
         saveAudioSettings(audioSettings);
+        
+        // Optional: Visual feedback (alert is simple)
+        // alert("Pengaturan berhasil disimpan!"); 
 
         onClose();
     };

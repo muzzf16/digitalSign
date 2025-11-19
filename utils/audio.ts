@@ -12,6 +12,7 @@ export const getAudioSettings = (): AudioSettings => {
   try {
     const stored = localStorage.getItem('bpr_audio_settings');
     if (stored) {
+      // Merge stored settings with default to ensure all fields exist
       return { ...DEFAULT_SETTINGS, ...JSON.parse(stored) };
     }
   } catch (e) {
@@ -21,7 +22,12 @@ export const getAudioSettings = (): AudioSettings => {
 };
 
 export const saveAudioSettings = (settings: AudioSettings) => {
-  localStorage.setItem('bpr_audio_settings', JSON.stringify(settings));
+  try {
+      localStorage.setItem('bpr_audio_settings', JSON.stringify(settings));
+      console.log("Audio settings saved:", settings);
+  } catch (e) {
+      console.error("Failed to save audio settings", e);
+  }
 };
 
 export const playChime = async (): Promise<void> => {
@@ -61,19 +67,47 @@ export const playChime = async (): Promise<void> => {
   return new Promise(resolve => setTimeout(resolve, 1800));
 };
 
+/**
+ * Helper to wait for voices to be loaded by the browser.
+ * Chrome requires onvoiceschanged, otherwise getVoices() returns empty array initially.
+ */
+const waitForVoices = (): Promise<SpeechSynthesisVoice[]> => {
+    return new Promise((resolve) => {
+        const voices = window.speechSynthesis.getVoices();
+        if (voices.length > 0) {
+            resolve(voices);
+            return;
+        }
+
+        window.speechSynthesis.onvoiceschanged = () => {
+            const updatedVoices = window.speechSynthesis.getVoices();
+            resolve(updatedVoices);
+        };
+        
+        // Fallback timeout if onvoiceschanged never fires
+        setTimeout(() => {
+             resolve(window.speechSynthesis.getVoices());
+        }, 2000);
+    });
+};
+
 export const announceQueue = async (prefix: string, number: number, location: string, testSettings?: AudioSettings) => {
   // 1. Play Chime first
   await playChime();
 
   if (!('speechSynthesis' in window)) return;
 
-  // 2. Prepare Text
+  // 2. Wait for voices to load properly
+  const voices = await waitForVoices();
+
+  // 3. Prepare Text
   // Format pengucapan yang natural: "Nomor Antrian... A... Seratus Dua... Silakan ke... Loket Satu"
   const text = `Nomor Antrian... ${prefix} ... ${number} ... Silakan menuju ... ${location}`;
 
   const utterance = new SpeechSynthesisUtterance(text);
   
-  // 3. Load Settings (Use provided test settings OR load from storage)
+  // 4. Load Settings (Use provided test settings OR load from storage)
+  // IMPORTANT: We fetch fresh settings here to ensure we use the latest saved value
   const settings = testSettings || getAudioSettings();
 
   utterance.lang = 'id-ID';
@@ -81,8 +115,7 @@ export const announceQueue = async (prefix: string, number: number, location: st
   utterance.pitch = settings.pitch;
   utterance.volume = settings.volume;
 
-  // 4. Find Voice
-  const voices = window.speechSynthesis.getVoices();
+  // 5. Find Voice based on URI
   let selectedVoice = null;
 
   // Try to find the specific voice saved in settings
@@ -90,15 +123,19 @@ export const announceQueue = async (prefix: string, number: number, location: st
     selectedVoice = voices.find(v => v.voiceURI === settings.voiceURI);
   }
 
-  // Fallback logic if saved voice is missing
+  // Fallback logic if saved voice is missing or not set
   if (!selectedVoice) {
+     // Priority: Google Indo -> Microsoft Indo -> Any Indo -> First available
      selectedVoice = voices.find(v => v.lang === 'id-ID' && v.name.includes('Google')) || 
-                     voices.find(v => v.lang === 'id-ID' && v.name.includes('Gadis')) ||
+                     voices.find(v => v.lang === 'id-ID' && v.name.includes('Microsoft')) ||
                      voices.find(v => v.lang === 'id-ID');
   }
 
   if (selectedVoice) {
     utterance.voice = selectedVoice;
+    console.log(`Announcing using voice: ${selectedVoice.name}`);
+  } else {
+    console.warn("No suitable voice found, using system default.");
   }
 
   window.speechSynthesis.speak(utterance);
