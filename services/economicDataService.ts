@@ -17,29 +17,48 @@ const parseScrapedIDR = (rate: string): string => {
 };
 
 const fetchHtmlFromProxy = async (targetUrl: string): Promise<string | null> => {
-    // Attempt 1: allorigins.win (Returns JSON { contents: "..." })
-    // This is often more reliable for text content
-    try {
-        const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(targetUrl)}`;
-        const response = await fetch(proxyUrl);
-        if (response.ok) {
-            const data = await response.json();
-            if (data.contents) return data.contents;
+    const proxies = [
+        // Attempt 1: allorigins.win (Returns JSON { contents: "..." })
+        // Best for avoiding CORS issues cleanly
+        {
+            name: 'allorigins',
+            getUrl: (url: string) => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
+            extract: async (res: Response) => {
+                const data = await res.json();
+                return data.contents;
+            }
+        },
+        // Attempt 2: CodeTabs (Returns raw HTML)
+        // Reliable fallback
+        {
+             name: 'codetabs',
+             getUrl: (url: string) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
+             extract: (res: Response) => res.text()
+        },
+        // Attempt 3: corsproxy.io (Returns raw HTML)
+        // Sometimes returns 403 Forbidden depending on headers/origin
+        {
+            name: 'corsproxy',
+            getUrl: (url: string) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
+            extract: (res: Response) => res.text()
         }
-    } catch (e) {
-        console.warn("Primary proxy (allorigins) failed, attempting backup...", e);
-    }
+    ];
 
-    // Attempt 2: corsproxy.io (Returns raw HTML)
-    // Useful if the first one is blocked or down
-    try {
-        const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
-        const response = await fetch(proxyUrl);
-        if (response.ok) {
-            return await response.text();
+    for (const proxy of proxies) {
+        try {
+            const response = await fetch(proxy.getUrl(targetUrl));
+            if (response.ok) {
+                const content = await proxy.extract(response);
+                // Basic validation to ensure we got some content back
+                if (content && typeof content === 'string' && content.length > 100) {
+                    return content;
+                }
+            } else {
+                console.warn(`Proxy ${proxy.name} returned status ${response.status}`);
+            }
+        } catch (e) {
+            console.warn(`Proxy ${proxy.name} failed for ${targetUrl}:`, e);
         }
-    } catch (e) {
-        console.warn("Secondary proxy (corsproxy.io) failed.", e);
     }
 
     return null;
