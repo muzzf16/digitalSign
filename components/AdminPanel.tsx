@@ -1,7 +1,7 @@
 
-import React, { useState } from 'react';
-import type { KreditPromo, InterestRate, DepositoRate, QueueState } from '../types';
-import { announceQueue } from '../utils/audio';
+import React, { useState, useEffect } from 'react';
+import type { KreditPromo, InterestRate, DepositoRate, QueueState, AudioSettings } from '../types';
+import { announceQueue, getAudioSettings, saveAudioSettings } from '../utils/audio';
 
 interface AdminPanelProps {
     kreditPromos: KreditPromo[];
@@ -26,8 +26,30 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
     const [localDepositoRates, setLocalDepositoRates] = useState<DepositoRate[]>(props.depositoRates);
     const [localImages, setLocalImages] = useState<string[]>(props.promoImages);
     
-    // --- Audio Announcement Logic ---
-    // Replaced by utils/audio.ts announceQueue function
+    // Audio Settings State
+    const [audioSettings, setAudioSettings] = useState<AudioSettings>(getAudioSettings());
+    const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
+
+    // Load voices on mount
+    useEffect(() => {
+        const updateVoices = () => {
+            const voices = window.speechSynthesis.getVoices();
+            setAvailableVoices(voices);
+            // If no voice is selected yet, try to pick a default Indo voice
+            if (!audioSettings.voiceURI) {
+                 const indoVoice = voices.find(v => v.lang === 'id-ID');
+                 if (indoVoice) {
+                     setAudioSettings(prev => ({...prev, voiceURI: indoVoice.voiceURI}));
+                 }
+            }
+        };
+
+        updateVoices();
+        if (window.speechSynthesis.onvoiceschanged !== undefined) {
+            window.speechSynthesis.onvoiceschanged = updateVoices;
+        }
+    }, []);
+
 
     // Queue Logic
     const updateQueue = (type: 'teller' | 'cs', delta: number) => {
@@ -129,6 +151,15 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
     const removeImage = (index: number) => {
         setLocalImages(localImages.filter((_, i) => i !== index));
     };
+    
+    // Audio Settings Handler
+    const handleAudioSettingChange = (field: keyof AudioSettings, value: string | number) => {
+        setAudioSettings(prev => ({ ...prev, [field]: value }));
+    };
+
+    const testVoice = () => {
+        announceQueue('A', 123, 'Loket Tes', audioSettings);
+    };
 
     const handleSave = () => {
         props.setKreditPromos(localPromos);
@@ -140,6 +171,9 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
         localStorage.setItem('bpr_savingsRates', JSON.stringify(localSavingsRates));
         localStorage.setItem('bpr_depositoRates', JSON.stringify(localDepositoRates));
         localStorage.setItem('bpr_promoImages', JSON.stringify(localImages.filter(img => img.trim() !== '')));
+        
+        // Save audio settings
+        saveAudioSettings(audioSettings);
 
         onClose();
     };
@@ -159,7 +193,7 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                         <div className="flex justify-between items-start mb-4">
                             <h3 className="text-xl font-semibold text-white flex items-center gap-2">
                                 <span className="bg-amber-500 w-2 h-6 rounded-full inline-block"></span>
-                                Kontrol Antrian (dengan Suara)
+                                Kontrol Antrian (Manual)
                             </h3>
                             
                             {/* Quick Access Links for Staff Views */}
@@ -236,6 +270,87 @@ const AdminPanel: React.FC<AdminPanelProps> = (props) => {
                                         </svg>
                                         Panggil Ulang
                                     </button>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    {/* Audio Settings Section (NEW) */}
+                    <section className="bg-slate-800/50 p-4 rounded-lg border border-slate-700">
+                         <h3 className="text-xl font-semibold text-white flex items-center gap-2 mb-4">
+                            <span className="bg-pink-500 w-2 h-6 rounded-full inline-block"></span>
+                            Konfigurasi Suara Pengumuman
+                        </h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-sm text-slate-300 mb-1">Pilih Suara (Voice)</label>
+                                    <select 
+                                        className="w-full bg-slate-700 text-white p-2 rounded border border-slate-600 focus:border-blue-500 outline-none"
+                                        value={audioSettings.voiceURI}
+                                        onChange={(e) => handleAudioSettingChange('voiceURI', e.target.value)}
+                                    >
+                                        {availableVoices.length === 0 && <option value="">Memuat daftar suara...</option>}
+                                        {availableVoices.map(v => (
+                                            <option key={v.voiceURI} value={v.voiceURI}>
+                                                {v.name} ({v.lang})
+                                            </option>
+                                        ))}
+                                    </select>
+                                    <p className="text-xs text-slate-400 mt-1">
+                                        Tips: Pilih suara yang berlabel "Google" atau "Microsoft" Bahasa Indonesia untuk hasil terbaik.
+                                    </p>
+                                </div>
+                                <button 
+                                    onClick={testVoice}
+                                    className="bg-pink-600 hover:bg-pink-700 text-white px-4 py-2 rounded flex items-center gap-2"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
+                                        <path d="M13.5 4.06c0-1.336-1.616-2.005-2.56-1.06l-4.5 4.5H4.508c-1.141 0-2.318.664-2.66 1.905A9.76 9.76 0 001.5 12c0 .898.121 1.768.35 2.595.341 1.24 1.518 1.905 2.659 1.905h1.93l4.5 4.5c.945.945 2.561.276 2.561-1.06V4.06zM18.584 5.106a.75.75 0 011.06 0c3.808 3.807 3.808 9.98 0 13.788a.75.75 0 11-1.06-1.06 8.25 8.25 0 000-11.668.75.75 0 010-1.06z" />
+                                    </svg>
+                                    Test Suara Sekarang
+                                </button>
+                            </div>
+                            
+                            <div className="space-y-4">
+                                <div>
+                                    <div className="flex justify-between text-sm mb-1">
+                                        <label className="text-slate-300">Kecepatan Bicara (Rate)</label>
+                                        <span className="text-amber-400">{audioSettings.rate}</span>
+                                    </div>
+                                    <input 
+                                        type="range" 
+                                        min="0.5" 
+                                        max="2.0" 
+                                        step="0.05"
+                                        value={audioSettings.rate}
+                                        onChange={(e) => handleAudioSettingChange('rate', parseFloat(e.target.value))}
+                                        className="w-full h-2 bg-slate-600 rounded-lg appearance-none cursor-pointer"
+                                    />
+                                    <div className="flex justify-between text-xs text-slate-500 px-1">
+                                        <span>Lambat</span>
+                                        <span>Cepat</span>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <div className="flex justify-between text-sm mb-1">
+                                        <label className="text-slate-300">Nada Suara (Pitch)</label>
+                                        <span className="text-amber-400">{audioSettings.pitch}</span>
+                                    </div>
+                                    <input 
+                                        type="range" 
+                                        min="0.5" 
+                                        max="2.0" 
+                                        step="0.1"
+                                        value={audioSettings.pitch}
+                                        onChange={(e) => handleAudioSettingChange('pitch', parseFloat(e.target.value))}
+                                        className="w-full h-2 bg-slate-600 rounded-lg appearance-none cursor-pointer"
+                                    />
+                                    <div className="flex justify-between text-xs text-slate-500 px-1">
+                                        <span>Berat</span>
+                                        <span>Tinggi</span>
+                                    </div>
                                 </div>
                             </div>
                         </div>

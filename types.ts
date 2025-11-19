@@ -59,3 +59,10 @@ export interface QueueState {
   teller: number;
   cs: number;
 }
+
+export interface AudioSettings {
+  voiceURI: string;
+  pitch: number;
+  rate: number;
+  volume: number;
+}

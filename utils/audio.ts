@@ -1,4 +1,29 @@
 
+import type { AudioSettings } from '../types';
+
+const DEFAULT_SETTINGS: AudioSettings = {
+  voiceURI: '',
+  pitch: 1.1, // Default Flight Attendant Pitch
+  rate: 0.85, // Default Flight Attendant Rate
+  volume: 1.0
+};
+
+export const getAudioSettings = (): AudioSettings => {
+  try {
+    const stored = localStorage.getItem('bpr_audio_settings');
+    if (stored) {
+      return { ...DEFAULT_SETTINGS, ...JSON.parse(stored) };
+    }
+  } catch (e) {
+    console.error("Error reading audio settings", e);
+  }
+  return DEFAULT_SETTINGS;
+};
+
+export const saveAudioSettings = (settings: AudioSettings) => {
+  localStorage.setItem('bpr_audio_settings', JSON.stringify(settings));
+};
+
 export const playChime = async (): Promise<void> => {
   const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
   if (!AudioContext) return;
@@ -36,37 +61,44 @@ export const playChime = async (): Promise<void> => {
   return new Promise(resolve => setTimeout(resolve, 1800));
 };
 
-export const announceQueue = async (prefix: string, number: number, location: string) => {
+export const announceQueue = async (prefix: string, number: number, location: string, testSettings?: AudioSettings) => {
   // 1. Play Chime first
   await playChime();
 
   if (!('speechSynthesis' in window)) return;
 
   // 2. Prepare Text
-  // Menggunakan ejaan fonetik dan tanda baca untuk jeda alami
-  const numberString = String(number).split('').join(' '); // "1 2 3" instead of "seratus..." for clear digit reading, or use normal reading:
-  
   // Format pengucapan yang natural: "Nomor Antrian... A... Seratus Dua... Silakan ke... Loket Satu"
   const text = `Nomor Antrian... ${prefix} ... ${number} ... Silakan menuju ... ${location}`;
 
   const utterance = new SpeechSynthesisUtterance(text);
   
-  // 3. Configure Voice (Flight Attendant Style)
+  // 3. Load Settings (Use provided test settings OR load from storage)
+  const settings = testSettings || getAudioSettings();
+
   utterance.lang = 'id-ID';
-  utterance.rate = 0.85; // Agak lambat, berwibawa
-  utterance.pitch = 1.1; // Sedikit lebih tinggi (feminin)
-  utterance.volume = 1.0;
+  utterance.rate = settings.rate;
+  utterance.pitch = settings.pitch;
+  utterance.volume = settings.volume;
 
-  // 4. Find the best "Female" Indonesian voice
+  // 4. Find Voice
   const voices = window.speechSynthesis.getVoices();
-  
-  // Prioritas: Google Bahasa Indonesia (Chrome) -> Microsoft Gadis (Edge/Windows) -> Default id-ID
-  const preferredVoice = voices.find(v => v.lang === 'id-ID' && v.name.includes('Google')) || 
-                         voices.find(v => v.lang === 'id-ID' && v.name.includes('Gadis')) ||
-                         voices.find(v => v.lang === 'id-ID');
+  let selectedVoice = null;
 
-  if (preferredVoice) {
-    utterance.voice = preferredVoice;
+  // Try to find the specific voice saved in settings
+  if (settings.voiceURI) {
+    selectedVoice = voices.find(v => v.voiceURI === settings.voiceURI);
+  }
+
+  // Fallback logic if saved voice is missing
+  if (!selectedVoice) {
+     selectedVoice = voices.find(v => v.lang === 'id-ID' && v.name.includes('Google')) || 
+                     voices.find(v => v.lang === 'id-ID' && v.name.includes('Gadis')) ||
+                     voices.find(v => v.lang === 'id-ID');
+  }
+
+  if (selectedVoice) {
+    utterance.voice = selectedVoice;
   }
 
   window.speechSynthesis.speak(utterance);
