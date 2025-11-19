@@ -1,6 +1,6 @@
 
 import type { EconomicData, CurrencyRate, GoldPrice } from '../types';
-import { MOCK_CURRENCY_RATES, MOCK_GOLD_PRICE, MOCK_NEWS_ITEMS, MOCK_STOCK_DATA } from '../constants';
+import { MOCK_CURRENCY_RATES, MOCK_GOLD_PRICE, MOCK_NEWS_ITEMS } from '../constants';
 
 // Helper to clean and parse mock currency strings (US Format: "16,688" -> 16688)
 const parseMockCurrency = (rate: string): number => {
@@ -199,7 +199,6 @@ export const fetchEconomicData = async (): Promise<EconomicData> => {
   return {
     currencyRates,
     goldPrice: liveGold || MOCK_GOLD_PRICE,
-    stockData: MOCK_STOCK_DATA,
     newsItems: MOCK_NEWS_ITEMS,
   };
 };

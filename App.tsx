@@ -9,7 +9,7 @@ import StaffQueuePanel from './components/StaffQueuePanel';
 import SettingsIcon from './components/icons/SettingsIcon';
 import { fetchEconomicData } from './services/economicDataService';
 import type { EconomicData, KreditPromo, InterestRate, DepositoRate, QueueState } from './types';
-import { MOCK_CURRENCY_RATES, MOCK_GOLD_PRICE, MOCK_NEWS_ITEMS, MOCK_STOCK_DATA, KREDIT_PROMOS, PROMO_IMAGES, SAVINGS_RATES, MOCK_DEPOSITO_RATES } from './constants';
+import { MOCK_CURRENCY_RATES, MOCK_GOLD_PRICE, MOCK_NEWS_ITEMS, KREDIT_PROMOS, PROMO_IMAGES, SAVINGS_RATES, MOCK_DEPOSITO_RATES } from './constants';
 import PromoCarousel from './components/PromoCarousel';
 import { initAppData } from './utils/imageStorage';
 
@@ -74,7 +74,6 @@ const App: React.FC = () => {
   const [economicData, setEconomicData] = useState<Omit<EconomicData, 'newsItems'>>({
     currencyRates: MOCK_CURRENCY_RATES,
     goldPrice: MOCK_GOLD_PRICE,
-    stockData: MOCK_STOCK_DATA,
   });
   const [newsItems, setNewsItems] = useState(MOCK_NEWS_ITEMS);
   
@@ -125,8 +124,7 @@ const App: React.FC = () => {
       const data = await fetchEconomicData();
       setEconomicData({
           currencyRates: data.currencyRates,
-          goldPrice: data.goldPrice,
-          stockData: data.stockData
+          goldPrice: data.goldPrice
       });
       setNewsItems(data.newsItems);
     };
@@ -214,8 +212,7 @@ const App: React.FC = () => {
             <div className="col-span-1 h-full overflow-hidden rounded-2xl shadow-2xl bg-black/40 backdrop-blur-md border border-white/5">
                 <Sidebar 
                   currencyRates={economicData.currencyRates} 
-                  goldPrice={economicData.goldPrice} 
-                  stockData={economicData.stockData}
+                  goldPrice={economicData.goldPrice}
                   kreditPromos={kreditPromos}
                   savingsRates={savingsRates}
                   depositoRates={depositoRates}

@@ -33,13 +33,6 @@ export const MOCK_GOLD_PRICE: GoldPrice = {
   currency: 'IDR',
 };
 
-export const MOCK_STOCK_DATA: StockData = {
-  symbol: '^JKSE',
-  regularMarketPrice: 8364.472,
-  regularMarketChange: 12.3,
-  regularMarketChangePercent: 0.15,
-};
-
 export const MOCK_NEWS_ITEMS: NewsItem[] = [
   { title: '3.000%, Investor Diberi Peringatan — Market', source: 'CNBC Indonesia' },
   { title: 'Berita Terkini Market, Saham, Reksadana', source: 'CNBC Indonesia' },

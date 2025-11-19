@@ -1,8 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import type { CurrencyRate, GoldPrice, StockData, KreditPromo, InterestRate, DepositoRate, QueueState } from '../types';
+import type { CurrencyRate, GoldPrice, KreditPromo, InterestRate, DepositoRate, QueueState } from '../types';
 import { useCurrentTime } from '../hooks/useCurrentTime';
-import SunIcon from './icons/SunIcon';
 
 // --- Reusable Carousel Component ---
 const InfoCarousel: React.FC<{ items: React.ReactNode[], interval?: number }> = ({ items, interval = 5000 }) => {
@@ -123,41 +122,61 @@ const DepositoInfo: React.FC<{rates: DepositoRate[]}> = ({ rates }) => {
     );
 };
 
-
-const MarketInfo: React.FC<{ rates: CurrencyRate[]; gold: GoldPrice | null; stock: StockData | null }> = ({ rates, gold, stock }) => {
+const CurrencyWidget: React.FC<{ rates: CurrencyRate[] }> = ({ rates }) => {
     const { timeString } = useCurrentTime();
     return (
-        <Widget className="flex flex-col">
-            <div className="space-y-3 text-lg flex-1">
-                {rates.slice(0, 2).map(rate => (
-                    <div key={rate.currency} className="flex justify-between items-baseline">
-                        <span className="font-medium text-slate-300">{rate.currency}</span>
-                        <span className="font-semibold">Rp {Number(rate.buy).toLocaleString('id-ID')}</span>
+        <Widget>
+            <h3 className="font-semibold text-lg mb-3 text-amber-400 border-b border-white/10 pb-2">Kurs Valas</h3>
+            <div className="space-y-4">
+                {rates.map(rate => (
+                    <div key={rate.currency} className="flex justify-between items-center">
+                        <div className="flex items-center gap-2">
+                            <span className="font-bold text-xl text-white bg-white/10 px-2 rounded">{rate.currency}</span>
+                        </div>
+                        <div className="text-right">
+                            <div className="flex gap-4">
+                                <div className="flex flex-col items-end">
+                                    <span className="text-[10px] uppercase text-slate-400">Beli</span>
+                                    <span className="font-mono font-semibold text-green-400">{Number(rate.buy).toLocaleString('id-ID')}</span>
+                                </div>
+                                <div className="flex flex-col items-end">
+                                    <span className="text-[10px] uppercase text-slate-400">Jual</span>
+                                    <span className="font-mono font-semibold text-red-400">{Number(rate.sell).toLocaleString('id-ID')}</span>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 ))}
-                 {gold && (
-                    <div className="flex justify-between items-baseline">
-                        <span className="font-medium text-slate-300">Emas / gram</span>
-                        <span className="font-semibold">Rp {gold.price.toLocaleString('id-ID')}</span>
-                    </div>
-                )}
-                 {stock && (
-                    <div className="flex justify-between items-baseline">
-                        <span className="font-medium text-slate-300">IHSG</span>
-                        <span className="font-semibold">{stock.regularMarketPrice.toLocaleString('id-ID', {minimumFractionDigits: 3})}</span>
-                    </div>
-                )}
             </div>
-            <p className="text-xs text-slate-500 text-right mt-3">Update: {new Date().toLocaleDateString('id-ID')} {timeString}</p>
+             <p className="text-[10px] text-slate-500 text-right mt-3">Update: {timeString}</p>
         </Widget>
     );
 };
+
+const GoldWidget: React.FC<{ gold: GoldPrice | null }> = ({ gold }) => (
+    <Widget className="bg-gradient-to-br from-amber-900/40 to-yellow-900/20 border border-amber-500/20 relative overflow-hidden">
+        <div className="absolute -right-6 -top-6 w-20 h-20 bg-yellow-500/10 rounded-full blur-xl"></div>
+        <div className="flex items-center justify-between mb-2 relative z-10">
+            <h3 className="font-semibold text-lg text-amber-400">Harga Emas</h3>
+            <span className="text-[10px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded border border-amber-500/30">Antam</span>
+        </div>
+        {gold ? (
+            <div className="flex flex-col items-center py-3 relative z-10">
+                <p className="text-4xl font-bold text-white tracking-tight drop-shadow-lg">
+                    Rp {gold.price.toLocaleString('id-ID')}
+                </p>
+                <p className="text-xs text-amber-200/70 mt-1 uppercase tracking-wider">Per 1 Gram</p>
+            </div>
+        ) : (
+            <p className="text-center text-slate-400 py-4">Data tidak tersedia</p>
+        )}
+    </Widget>
+);
 
 // --- Main Sidebar Component ---
 interface SidebarProps {
   currencyRates: CurrencyRate[];
   goldPrice: GoldPrice | null;
-  stockData: StockData | null;
   kreditPromos: KreditPromo[];
   savingsRates: InterestRate[];
   depositoRates: DepositoRate[];
@@ -165,7 +184,7 @@ interface SidebarProps {
 }
 
 const Sidebar: React.FC<SidebarProps> = (props) => {
-  const { currencyRates, goldPrice, stockData, kreditPromos, savingsRates, depositoRates, queueState } = props;
+  const { currencyRates, goldPrice, kreditPromos, savingsRates, depositoRates, queueState } = props;
   const contentRef = useRef<HTMLDivElement>(null);
   const [animationDuration, setAnimationDuration] = useState('50s');
 
@@ -188,7 +207,7 @@ const Sidebar: React.FC<SidebarProps> = (props) => {
       clearTimeout(timeoutId);
       window.removeEventListener('resize', calculateDuration);
     };
-  }, [currencyRates, goldPrice, stockData, kreditPromos, savingsRates, depositoRates]);
+  }, [currencyRates, goldPrice, kreditPromos, savingsRates, depositoRates]);
 
 
   const sidebarContent = (
@@ -198,7 +217,8 @@ const Sidebar: React.FC<SidebarProps> = (props) => {
         <TabunganInfo rates={savingsRates} />
         <DepositoInfo rates={depositoRates} />
       </div>
-      <MarketInfo rates={currencyRates} gold={goldPrice} stock={stockData} />
+      <CurrencyWidget rates={currencyRates} />
+      <GoldWidget gold={goldPrice} />
     </>
   );
 

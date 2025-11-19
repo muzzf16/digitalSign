@@ -39,7 +39,6 @@ export interface InterestRate {
 export interface EconomicData {
   currencyRates: CurrencyRate[];
   goldPrice: GoldPrice | null;
-  stockData: StockData | null;
   newsItems: NewsItem[];
 }
 
