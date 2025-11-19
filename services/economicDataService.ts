@@ -17,48 +17,22 @@ const parseScrapedIDR = (rate: string): string => {
 };
 
 const fetchHtmlFromProxy = async (targetUrl: string): Promise<string | null> => {
-    const proxies = [
-        // Attempt 1: allorigins.win (Returns JSON { contents: "..." })
-        // Best for avoiding CORS issues cleanly
-        {
-            name: 'allorigins',
-            getUrl: (url: string) => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
-            extract: async (res: Response) => {
-                const data = await res.json();
-                return data.contents;
-            }
-        },
-        // Attempt 2: CodeTabs (Returns raw HTML)
-        // Reliable fallback
-        {
-             name: 'codetabs',
-             getUrl: (url: string) => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
-             extract: (res: Response) => res.text()
-        },
-        // Attempt 3: corsproxy.io (Returns raw HTML)
-        // Sometimes returns 403 Forbidden depending on headers/origin
-        {
-            name: 'corsproxy',
-            getUrl: (url: string) => `https://corsproxy.io/?${encodeURIComponent(url)}`,
-            extract: (res: Response) => res.text()
-        }
-    ];
+    const localProxyUrl = `http://localhost:3001/proxy?url=${encodeURIComponent(targetUrl)}`;
 
-    for (const proxy of proxies) {
-        try {
-            const response = await fetch(proxy.getUrl(targetUrl));
-            if (response.ok) {
-                const content = await proxy.extract(response);
-                // Basic validation to ensure we got some content back
-                if (content && typeof content === 'string' && content.length > 100) {
-                    return content;
-                }
-            } else {
-                console.warn(`Proxy ${proxy.name} returned status ${response.status}`);
+    try {
+        const response = await fetch(localProxyUrl);
+        if (response.ok) {
+            const content = await response.text();
+            if (content && content.length > 100) {
+                console.log(`Successfully fetched ${targetUrl} via local proxy.`);
+                return content;
             }
-        } catch (e) {
-            console.warn(`Proxy ${proxy.name} failed for ${targetUrl}:`, e);
+        } else {
+            console.error(`Local proxy server returned status ${response.status} for ${targetUrl}`);
         }
+    } catch (e) {
+        console.error(`Failed to fetch from local proxy for ${targetUrl}:`, e);
+        console.error('Please ensure the proxy server is running. Start it with "npm run start-proxy" in a separate terminal.');
     }
 
     return null;
@@ -78,58 +52,47 @@ const fetchBcaRates = async (): Promise<CurrencyRate[] | null> => {
         const parser = new DOMParser();
         const doc = parser.parseFromString(htmlContent, 'text/html');
         
-        const targetCurrencies = ['USD', 'SGD', 'EUR', 'CNY', 'AUD', 'JPY'];
+        // Map app currency codes to website codes if they differ
+        const currencyMap: { [key: string]: string } = {
+            'USD': 'USD',
+            'SGD': 'SGD',
+            'EUR': 'EUR',
+            'CNY': 'CNH', // App uses CNY, website uses CNH
+            'AUD': 'AUD',
+            'JPY': 'JPY'
+        };
+        const targetCurrencies = Object.keys(currencyMap);
         const scrapedRates: CurrencyRate[] = [];
 
-        // BCA tables are standard HTML. We find rows containing our target currencies.
-        const rows = Array.from(doc.querySelectorAll('tr'));
-
-        targetCurrencies.forEach(currency => {
-            // Find the row that contains the currency code (e.g., "USD")
-            // We look for exact match or close to it to avoid matching "US Dollar" in a different context if possible
-            const row = rows.find(r => r.textContent?.includes(currency));
+        targetCurrencies.forEach(appCurrency => {
+            const siteCurrency = currencyMap[appCurrency];
             
-            if (row) {
-                // Extract all text from cells in the row
-                const cells = Array.from(row.querySelectorAll('td'));
-                const cellTexts = cells.map(c => c.textContent?.trim() || '');
-                
-                // Find values that look like currency rates (e.g., "15.850,00" or "10.000")
-                // Regex matches: digits, optional dots for thousands, optional comma + digits for decimals
-                const numberPattern = /[0-9]{1,3}(\.[0-9]{3})*(,[0-9]{2})?/;
-                
-                // We filter cells that match the number pattern and are long enough to be rates (ignoring small integers like "1")
-                // Also ensure it contains a comma or dot to distinguish from simple integers if needed, though checking length > 3 helps.
-                const potentialRates = cellTexts.filter(text => numberPattern.test(text) && text.length > 3);
+            // Use robust selectors to find the specific rate cells based on site's currency code.
+            const buyCell = doc.querySelector(`tr[code="${siteCurrency}"] [rate-type="eRate-buy"] p`);
+            const sellCell = doc.querySelector(`tr[code="${siteCurrency}"] [rate-type="eRate-sell"] p`);
 
-                // BCA Table usually has: [Currency] ... [e-Rate Buy] [e-Rate Sell] ...
-                // We take the first two distinct valid numbers found as Buy and Sell rates.
-                if (potentialRates.length >= 2) {
-                    const buyStr = potentialRates[0]; // e.g. "15.850,00"
-                    const sellStr = potentialRates[1]; // e.g. "15.950,00"
+            if (buyCell && sellCell) {
+                const buyStr = buyCell.textContent?.trim() || '';
+                const sellStr = sellCell.textContent?.trim() || '';
 
-                    // Parse to standard number string "15850.00" for the app state
-                    const buy = parseScrapedIDR(buyStr);
-                    const sell = parseScrapedIDR(sellStr);
+                const buy = parseScrapedIDR(buyStr);
+                const sell = parseScrapedIDR(sellStr);
 
-                    if (buy && sell && !isNaN(parseFloat(buy))) {
-                         scrapedRates.push({
-                            currency,
-                            buy, 
-                            sell
-                        });
-                    }
+                if (buy && sell && !isNaN(parseFloat(buy))) {
+                     scrapedRates.push({
+                        currency: appCurrency, // Use the app's currency code
+                        buy, 
+                        sell
+                    });
                 }
             }
         });
-
-        // Remove duplicates (in case multiple tables exist on the page)
-        const uniqueRates = scrapedRates.filter((v, i, a) => a.findIndex(t => t.currency === v.currency) === i);
         
-        if (uniqueRates.length > 0) {
-            return uniqueRates;
+        if (scrapedRates.length > 0) {
+            return scrapedRates;
         }
         
+        console.warn("Could not scrape any rates from BCA. The site structure may have changed.");
         return null;
 
     } catch (error) {
@@ -151,41 +114,25 @@ const fetchGoldPrice = async (): Promise<GoldPrice | null> => {
         const parser = new DOMParser();
         const doc = parser.parseFromString(htmlContent, 'text/html');
 
-        // Strategy: Search for "1 Gram" in the table and find the associated price.
-        // This is more robust than fixed selectors.
-        const allCells = Array.from(doc.querySelectorAll('td, th, div'));
-        
-        // Find the cell that says "1 Gram" (or variations)
-        const weightCell = allCells.find(cell => {
-            const text = cell.textContent?.toLowerCase() || '';
-            return (text.includes('1 gram') || text.includes('1 gr')) && text.length < 15;
-        });
+        // Strategy: Find the summary box for "Harga Emas 1 gram" and extract the price.
+        const priceElement = doc.querySelector('.widget-harga-emas .harga-hari-ini');
 
-        if (weightCell && weightCell.parentElement) {
-            // Get all cells in that specific row
-            const rowCells = Array.from(weightCell.parentElement.querySelectorAll('td'));
+        if (priceElement) {
+            const text = priceElement.textContent?.trim() || '';
             
-            // Iterate through the cells in that row to find the first valid price
-            for (const cell of rowCells) {
-                const text = cell.textContent?.trim() || '';
-                
-                // Skip the weight cell itself
-                if (text.toLowerCase().includes('gram')) continue;
-
-                // Check if it looks like a price (contains numbers, dots, maybe Rp)
-                // We strip non-numeric characters to check the value
-                const cleanNumbers = text.replace(/[^0-9]/g, '');
-                
-                // Emas Antam price is usually > 1,000,000. Check for reasonable length (e.g., > 5 digits)
-                if (cleanNumbers.length > 5) {
-                    return {
-                        price: parseInt(cleanNumbers, 10),
-                        currency: 'IDR'
-                    };
-                }
+            // The text is "Rp. 2.343.000"
+            const cleanNumbers = text.replace(/[^0-9]/g, '');
+            
+            // Price is usually > 1,000,000. Check for reasonable length.
+            if (cleanNumbers.length > 5) {
+                return {
+                    price: parseInt(cleanNumbers, 10),
+                    currency: 'IDR'
+                };
             }
         }
-
+        
+        console.warn("Could not scrape gold price from emasantam.id. The site structure may have changed.");
         return null;
     } catch (error) {
         console.error("Error parsing Gold data:", error);
