@@ -17,8 +17,10 @@ const parseScrapedIDR = (rate: string): string => {
 };
 
 const fetchHtmlFromProxy = async (targetUrl: string): Promise<string | null> => {
-<<<<<<< HEAD
-    const localProxyUrl = `http://localhost:3001/proxy?url=${encodeURIComponent(targetUrl)}`;
+    // Use the hostname of the current page to build the proxy URL.
+    // This allows the app to work seamlessly whether accessed via localhost or a local network IP.
+    const proxyHost = window.location.hostname;
+    const localProxyUrl = `http://${proxyHost}:3001/proxy?url=${encodeURIComponent(targetUrl)}`;
 
     try {
         const response = await fetch(localProxyUrl);
@@ -33,23 +35,7 @@ const fetchHtmlFromProxy = async (targetUrl: string): Promise<string | null> => 
         }
     } catch (e) {
         console.error(`Failed to fetch from local proxy for ${targetUrl}:`, e);
-        console.error('Please ensure the proxy server is running. Start it with "npm run start-proxy" in a separate terminal.');
-=======
-    // We now use our local Node.js proxy server to avoid CORS and stability issues.
-    // Ensure you are running 'node server.js' in a separate terminal.
-    const LOCAL_PROXY_URL = 'http://localhost:3001/proxy';
-
-    try {
-        const response = await fetch(`${LOCAL_PROXY_URL}?url=${encodeURIComponent(targetUrl)}`);
-        
-        if (response.ok) {
-            return await response.text();
-        } else {
-            console.warn(`Local proxy returned status ${response.status} for ${targetUrl}`);
-        }
-    } catch (e) {
-        console.warn(`Failed to connect to local proxy at ${LOCAL_PROXY_URL}. Is 'node server.js' running?`, e);
->>>>>>> 07de57f3340960f331a216b5c0bc130f3ddf7681
+        console.error('Please ensure the proxy server is running on the host machine. Start it with "npm run start-proxy".');
     }
 
     return null;
