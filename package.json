@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:server": "node proxy-server.cjs",
+    "dev:all": "concurrently \"npm run dev\" \"npm run dev:server\" --names \"vite,api\" --prefix-colors \"cyan,green\"",
     "build": "vite build",
     "preview": "vite preview",
     "start-proxy": "node proxy-server.cjs",
@@ -20,6 +22,7 @@
   "devDependencies": {
     "@types/node": "^22.14.0",
     "@vitejs/plugin-react": "^5.0.0",
+    "concurrently": "^9.2.1",
     "typescript": "~5.8.2",
     "vite": "^6.2.0"
   }

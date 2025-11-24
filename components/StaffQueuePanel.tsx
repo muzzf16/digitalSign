@@ -1,9 +1,10 @@
 
-import React from 'react';
+import React, { useState, useCallback } from 'react';
 import type { QueueState, AudioSettings, KreditPromo, InterestRate, DepositoRate } from '../types';
 import { announceQueue } from '../utils/audio';
+import { Button, useToast, LoadingOverlay } from './ui';
+import { COLORS } from '../constants/theme';
 
-// The panel now needs the full data model to be able to save it back to the server
 interface FullDataModel {
   logo: string | null;
   promos: KreditPromo[];
@@ -19,8 +20,15 @@ interface StaffQueuePanelProps {
   allData: FullDataModel;
 }
 
+/**
+ * Staff Queue Control Panel for Teller and Customer Service
+ * @component
+ */
 const StaffQueuePanel: React.FC<StaffQueuePanelProps> = ({ role, allData }) => {
   const { queue, audio } = allData;
+  const { showToast } = useToast();
+  const [isSaving, setIsSaving] = useState(false);
+  const [isAnnouncing, setIsAnnouncing] = useState(false);
 
   const isTeller = role === 'teller';
   const title = isTeller ? 'Panel Kontrol Teller' : 'Panel Kontrol Customer Service';
@@ -29,79 +37,167 @@ const StaffQueuePanel: React.FC<StaffQueuePanelProps> = ({ role, allData }) => {
   const colorClass = isTeller ? 'blue' : 'emerald';
   const locationName = isTeller ? 'Loket Satu' : 'Meja Customer Service';
 
-  const saveData = async (updatedQueue: QueueState) => {
+  const saveData = useCallback(async (updatedQueue: QueueState): Promise<boolean> => {
     const dataToSave = { ...allData, queue: updatedQueue };
     const apiUrl = `/api/data`;
 
+    setIsSaving(true);
     try {
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(dataToSave),
       });
+      
       if (!response.ok) {
-        throw new Error('Server returned an error');
+        const errorText = await response.text();
+        throw new Error(`Server error: ${response.status} - ${errorText}`);
       }
+      
+      showToast('Antrian berhasil diperbarui', 'success', 3000);
+      return true;
     } catch (error) {
       console.error("Failed to save queue update:", error);
-      alert("Gagal menyimpan pembaruan antrian ke server. Periksa konsol untuk detail.");
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      showToast(`Gagal menyimpan: ${errorMessage}`, 'error', 5000);
+      return false;
+    } finally {
+      setIsSaving(false);
+    }
+  }, [allData, showToast]);
+
+  const handleNext = async () => {
+    if (isAnnouncing || isSaving) return;
+    
+    const newVal = currentNumber + 1;
+    const newQueueState = { ...queue, [role]: newVal };
+    
+    setIsAnnouncing(true);
+    try {
+      announceQueue(prefix, newVal, locationName, audio);
+      await saveData(newQueueState);
+    } catch (error) {
+      console.error("Error in handleNext:", error);
+      showToast('Terjadi kesalahan saat memproses antrian', 'error');
+    } finally {
+      setIsAnnouncing(false);
     }
   };
 
-  const handleNext = async () => {
-    const newVal = currentNumber + 1;
-    const newQueueState = { ...queue, [role]: newVal };
-    // Announce first
-    announceQueue(prefix, newVal, locationName, audio);
-    // Then save to server
-    await saveData(newQueueState);
-  };
-
   const handleRecall = () => {
-    if (currentNumber > 0) {
-      announceQueue(prefix, currentNumber, locationName, audio);
+    if (currentNumber > 0 && !isAnnouncing) {
+      setIsAnnouncing(true);
+      try {
+        announceQueue(prefix, currentNumber, locationName, audio);
+        showToast('Memanggil ulang antrian', 'info', 2000);
+      } catch (error) {
+        console.error("Error in handleRecall:", error);
+        showToast('Gagal memanggil ulang antrian', 'error');
+      } finally {
+        setTimeout(() => setIsAnnouncing(false), 1000);
+      }
     }
   };
 
   const handleReset = async () => {
+    if (isSaving) return;
+    
     if (confirm(`Reset antrian ${isTeller ? 'Teller' : 'CS'} ke 0?`)) {
       const newQueueState = { ...queue, [role]: 0 };
-      await saveData(newQueueState);
+      const success = await saveData(newQueueState);
+      if (success) {
+        showToast('Antrian berhasil direset', 'success');
+      }
     }
   };
 
   return (
-    <div className="min-h-screen bg-[#0a192f] flex items-center justify-center p-4">
-      <div className={`bg-[#162842] w-full max-w-md rounded-2xl shadow-2xl border-t-4 border-${colorClass}-500 overflow-hidden`}>
-        <div className="bg-black/20 p-6 text-center">
-          <h1 className="text-2xl font-bold text-white mb-1">{title}</h1>
-          <p className="text-slate-400 text-sm">BPR Digital Signage Controller</p>
-        </div>
-        <div className="p-8 flex flex-col items-center justify-center bg-[#0f1c30]">
-          <span className={`text-${colorClass}-400 text-sm uppercase tracking-widest font-semibold mb-2`}>Nomor Saat Ini</span>
-          <div className="text-8xl font-bold text-white tracking-tighter">{prefix}-{String(currentNumber).padStart(3, '0')}</div>
-        </div>
-        <div className="p-6 grid gap-4">
-          <button onClick={handleNext} className={`w-full py-6 rounded-xl text-white font-bold text-xl shadow-lg transform transition active:scale-95 flex items-center justify-center gap-3 ${isTeller ? 'bg-blue-600 hover:bg-blue-500' : 'bg-emerald-600 hover:bg-emerald-500'}`}>
-            <span>PANGGIL BERIKUTNYA</span>
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z" /></svg>
-          </button>
-          <div className="grid grid-cols-2 gap-4">
-            <button onClick={handleRecall} className="py-4 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-semibold shadow-lg transition flex flex-col items-center justify-center gap-1">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
-              <span className="text-sm">Panggil Ulang</span>
-            </button>
-            <button onClick={handleReset} className="py-4 rounded-xl bg-slate-700 hover:bg-slate-600 text-slate-200 font-semibold shadow-lg transition flex flex-col items-center justify-center gap-1">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-              <span className="text-sm">Reset 0</span>
-            </button>
+    <>
+      <div className="min-h-screen bg-[#0a192f] flex items-center justify-center p-4">
+        <div className={`bg-[#162842] w-full max-w-md rounded-2xl shadow-2xl border-t-4 border-${colorClass}-500 overflow-hidden`}>
+          <div className="bg-black/20 p-6 text-center">
+            <h1 className="text-2xl font-bold text-white mb-1">{title}</h1>
+            <p className="text-slate-400 text-sm">BPR Digital Signage Controller</p>
+          </div>
+          <div className="p-8 flex flex-col items-center justify-center bg-[#0f1c30]">
+            <span 
+              className={`text-${colorClass}-400 text-sm uppercase tracking-widest font-semibold mb-2`}
+              role="status"
+              aria-live="polite"
+            >
+              Nomor Saat Ini
+            </span>
+            <div 
+              className="text-8xl font-bold text-white tracking-tighter"
+              aria-label={`Antrian nomor ${prefix} ${currentNumber}`}
+            >
+              {prefix}-{String(currentNumber).padStart(3, '0')}
+            </div>
+          </div>
+          <div className="p-6 grid gap-4">
+            <Button
+              onClick={handleNext}
+              variant={isTeller ? 'blue' : 'emerald'}
+              size="xl"
+              fullWidth
+              disabled={isAnnouncing || isSaving}
+              loading={isAnnouncing}
+              className="py-6"
+              aria-label="Panggil nomor antrian berikutnya"
+              icon={
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z" />
+                </svg>
+              }
+            >
+              PANGGIL BERIKUTNYA
+            </Button>
+            <div className="grid grid-cols-2 gap-4">
+              <Button
+                onClick={handleRecall}
+                variant="warning"
+                size="lg"
+                disabled={currentNumber === 0 || isAnnouncing}
+                className="py-4 flex-col"
+                aria-label="Panggil ulang nomor antrian saat ini"
+                icon={
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                }
+              >
+                <span className="text-sm">Panggil Ulang</span>
+              </Button>
+              <Button
+                onClick={handleReset}
+                variant="ghost"
+                size="lg"
+                disabled={isSaving}
+                className="py-4 flex-col"
+                aria-label="Reset antrian ke nomor 0"
+                icon={
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                }
+              >
+                <span className="text-sm">Reset 0</span>
+              </Button>
+            </div>
+          </div>
+          <div className="bg-black/20 p-4 text-center">
+            <a 
+              href="/" 
+              className="text-slate-500 text-xs hover:text-white underline"
+              aria-label="Kembali ke tampilan layar utama"
+            >
+              Kembali ke Tampilan Layar Utama
+            </a>
           </div>
         </div>
-        <div className="bg-black/20 p-4 text-center">
-          <a href="/" className="text-slate-500 text-xs hover:text-white underline">Kembali ke Tampilan Layar Utama</a>
-        </div>
       </div>
-    </div>
+      {isSaving && <LoadingOverlay message="Menyimpan perubahan..." />}
+    </>
   );
 };
 

@@ -20,9 +20,10 @@ app.use(express.json({ limit: '10mb' })); // Increase limit to handle base64 ima
 app.get('/api/data', (req, res) => {
     fs.readFile(DB_PATH, 'utf8', (err, data) => {
         if (err) {
-            console.error('Error reading database file:', err);
-            return res.status(500).send('Error reading database');
+            console.error('❌ Error reading database file:', err);
+            return res.status(500).json({ error: 'Error reading database' });
         }
+        console.log('✅ GET /api/data - Database loaded successfully');
         res.setHeader('Content-Type', 'application/json');
         res.send(data);
     });
@@ -32,15 +33,17 @@ app.get('/api/data', (req, res) => {
 app.post('/api/data', (req, res) => {
     const newData = req.body;
     if (!newData) {
-        return res.status(400).send('No data provided');
+        console.log('⚠️  POST /api/data - No data provided');
+        return res.status(400).json({ error: 'No data provided' });
     }
 
     fs.writeFile(DB_PATH, JSON.stringify(newData, null, 2), 'utf8', (err) => {
         if (err) {
-            console.error('Error writing to database file:', err);
-            return res.status(500).send('Error writing to database');
+            console.error('❌ Error writing to database file:', err);
+            return res.status(500).json({ error: 'Error writing to database' });
         }
-        res.status(200).send('Data saved successfully');
+        console.log('💾 POST /api/data - Database saved successfully');
+        res.status(200).json({ message: 'Data saved successfully' });
     });
 });
 
@@ -77,13 +80,20 @@ app.get('/proxy', async (req, res) => {
 app.use(express.static(path.join(__dirname, 'dist')));
 
 // Handle SPA routing - return index.html for all non-API routes
-app.get('*', (req, res) => {
-    if (req.path.startsWith('/api') || req.path.startsWith('/proxy')) {
-        return res.status(404).send('Not found');
-    }
+app.get(/^\/(?!api|proxy).*/, (req, res) => {
     res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 
-app.listen(port, () => {
-    console.log(`Proxy and API server listening at http://localhost:${port}`);
+app.listen(port, '0.0.0.0', () => {
+    console.log('\n╔════════════════════════════════════════════════════════════════╗');
+    console.log('║        BPR Digital Signage - API Server Started! 🚀           ║');
+    console.log('╠════════════════════════════════════════════════════════════════╣');
+    console.log(`║  Local:    http://localhost:${port}                             ║`);
+    console.log(`║  API:      http://localhost:${port}/api/data                    ║`);
+    console.log(`║  Proxy:    http://localhost:${port}/proxy?url=...              ║`);
+    console.log('║                                                                ║');
+    console.log('║  Database: db.json                                             ║');
+    console.log('║  Status:   ✅ Ready to accept connections                      ║');
+    console.log('╚════════════════════════════════════════════════════════════════╝\n');
+    console.log('💡 Tip: Run "npm run dev:all" to start both API and Vite server\n');
 });

@@ -1,29 +1,115 @@
-import React from 'react';
+import React, { useState } from 'react';
 import type { KreditPromo } from '../../types';
 import type { WithId } from '../../hooks/useAdminForm';
+import { validateRequired, validateRate, validateFileSize, validateImageFile } from '../../utils/validation';
+import { Input } from '../ui';
 
 interface AdminPromosProps {
     promos: WithId<KreditPromo>[];
     setPromos: (promos: WithId<KreditPromo>[]) => void;
 }
 
+interface PromoErrors {
+    [key: number]: {
+        title?: string;
+        rate?: string;
+        description?: string;
+        image?: string;
+    };
+}
+
+/**
+ * Admin component for managing promotional items
+ * @component
+ */
 const AdminPromos: React.FC<AdminPromosProps> = ({ promos, setPromos }) => {
-    const handlePromoChange = (id: number, field: keyof KreditPromo, value: string) => setPromos(promos.map(p => p._id === id ? { ...p, [field]: value } : p));
-    const addPromo = () => setPromos([...promos, { title: 'Promo Baru', rate: '0%', description: 'Deskripsi singkat', backgroundImage: '', _id: Date.now() }]);
-    const removePromo = (id: number) => setPromos(promos.filter(p => p._id !== id));
+    const [errors, setErrors] = useState<PromoErrors>({});
+
+    const handlePromoChange = (id: number, field: keyof KreditPromo, value: string) => {
+        setPromos(promos.map(p => p._id === id ? { ...p, [field]: value } : p));
+        
+        if (errors[id]?.[field]) {
+            setErrors(prev => ({
+                ...prev,
+                [id]: { ...prev[id], [field]: undefined }
+            }));
+        }
+    };
+
+    const validatePromo = (promo: WithId<KreditPromo>): boolean => {
+        const newErrors: { title?: string; rate?: string; description?: string } = {};
+        
+        const titleValidation = validateRequired(promo.title, 'Judul');
+        if (!titleValidation.isValid) newErrors.title = titleValidation.error;
+        
+        const rateValidation = validateRate(promo.rate);
+        if (!rateValidation.isValid) newErrors.rate = rateValidation.error;
+        
+        const descValidation = validateRequired(promo.description, 'Deskripsi');
+        if (!descValidation.isValid) newErrors.description = descValidation.error;
+        
+        if (Object.keys(newErrors).length > 0) {
+            setErrors(prev => ({ ...prev, [promo._id]: newErrors }));
+            return false;
+        }
+        
+        return true;
+    };
+
+    const addPromo = () => {
+        setPromos([...promos, { 
+            title: 'Promo Baru', 
+            rate: '0%', 
+            description: 'Deskripsi singkat', 
+            backgroundImage: '', 
+            _id: Date.now() 
+        }]);
+    };
+
+    const removePromo = (id: number) => {
+        setPromos(promos.filter(p => p._id !== id));
+        setErrors(prev => {
+            const newErrors = { ...prev };
+            delete newErrors[id];
+            return newErrors;
+        });
+    };
 
     const handleImageUpload = (id: number, e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
-        if (file) {
-            if (file.size > 5 * 1024 * 1024) { alert("Ukuran gambar terlalu besar (Max 5MB)."); return; }
-            const reader = new FileReader();
-            reader.onload = (loadEvent) => {
-                if (loadEvent.target?.result) {
-                    handlePromoChange(id, 'backgroundImage', loadEvent.target.result as string);
-                }
-            };
-            reader.readAsDataURL(file);
+        if (!file) return;
+
+        const sizeValidation = validateFileSize(file, 5);
+        if (!sizeValidation.isValid) {
+            setErrors(prev => ({
+                ...prev,
+                [id]: { ...prev[id], image: sizeValidation.error }
+            }));
+            return;
         }
+
+        const typeValidation = validateImageFile(file);
+        if (!typeValidation.isValid) {
+            setErrors(prev => ({
+                ...prev,
+                [id]: { ...prev[id], image: typeValidation.error }
+            }));
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = (loadEvent) => {
+            if (loadEvent.target?.result) {
+                handlePromoChange(id, 'backgroundImage', loadEvent.target.result as string);
+                if (errors[id]?.image) {
+                    setErrors(prev => ({
+                        ...prev,
+                        [id]: { ...prev[id], image: undefined }
+                    }));
+                }
+            }
+        };
+        reader.readAsDataURL(file);
     };
 
     return (
